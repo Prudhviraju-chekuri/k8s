@@ -1,0 +1,19 @@
+Unit-3. Getting Kubernetes:
+1. practice creating k8s cluster manually.
+2. create gke cluster
+
+Unit-4. Working with Pods:
+1. cread a pod deployment
+2. practice examples for the following:
+• Sidecar pattern
+• Adapter pattern
+• Ambassador pattern
+• Init pattern
+
+Unit-5: Virtual clusters with Namespaces:
+1. create a Namespaces
+2. deploy objects to a name space
+3. change config set-context for setting the current namespace
+
+Unit-6: : Kubernetes Deployments
+1. 
