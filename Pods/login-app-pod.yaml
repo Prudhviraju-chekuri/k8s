@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-pod
+  labels:
+    app: login-app
+spec:
+  containers:
+  - name: login-app
+    image: prchekuri/login-2514:Prudhvi
+    ports:
+    - containerPort: 80
