@@ -9,5 +9,5 @@ spec:
   - name: login-app
     image: prchekuri/login-2514:poornima
     ports:
-    - containerPort: 8080
+    - containerPort: 80
 
