@@ -1,0 +1,256 @@
+1️⃣ Basic Structure of a Pod YAML
+apiVersion: v1
+kind: Pod
+metadata:
+spec:
+status:   # (auto-filled by Kubernetes, not written manually)
+
+2️⃣ metadata Section
+
+Controls identity & organization.
+
+metadata:
+  name: my-pod
+  namespace: default
+  labels:
+    app: nginx
+  annotations:
+    description: "Frontend Pod"
+  generateName: web-
+  ownerReferences:
+  finalizers:
+🔹 Common metadata fields
+Field	          Purpose
+name	          Pod name
+namespace	      Logical isolation
+labels	          Used by Services/Selectors
+annotations	      Extra metadata (not for selection)
+generateName      Auto-generate name
+ownerReferences   Used by ReplicaSets/Deployments
+finalizers	      Control deletion behavior
+
+3️⃣ spec Section (Most Important)
+
+This defines how the Pod runs.
+
+🐳 A. containers (MANDATORY)
+spec:
+  containers:
+    - name: app
+      image: nginx:1.25
+
+Each container can have:
+
+🔹 1. Image & Pull
+image:
+imagePullPolicy:
+imagePullSecrets:
+Field	Values
+image	Container image
+imagePullPolicy	Always / IfNotPresent / Never
+imagePullSecrets	Private registry secret
+
+🔹 2. Ports
+ports:
+  - containerPort: 80
+    protocol: TCP
+
+🔹 3. Command & Arguments
+command: ["sleep"]
+args: ["3600"]
+
+Overrides Docker ENTRYPOINT & CMD.
+
+🔹 4. Environment Variables
+env:
+  - name: ENV
+    value: prod
+
+envFrom:
+  - configMapRef:
+      name: my-config
+
+Sources:
+literal values
+ConfigMap
+Secret
+FieldRef (Pod info)
+ResourceFieldRef
+
+🔹 5. Resources
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "256Mi"
+
+🔹 6. Probes (Health Checks)
+livenessProbe:
+readinessProbe:
+startupProbe:
+
+Types:
+httpGet
+tcpSocket
+exec
+Example:
+livenessProbe:
+  httpGet:
+    path: /
+    port: 80
+  initialDelaySeconds: 5
+
+🔹 7. Volume Mounts
+volumeMounts:
+  - name: config
+    mountPath: /etc/config
+
+🔹 8. Security Context (Container Level)
+securityContext:
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+
+🔹 9. Lifecycle Hooks
+lifecycle:
+  postStart:
+  preStop:
+
+🔹 10. Working Directory
+workingDir: /app
+
+🔹 11. stdin & tty
+stdin: true
+tty: true
+
+🔁 B. initContainers
+
+Run before main containers.
+
+initContainers:
+  - name: init-db
+    image: busybox
+    command: ["sh", "-c", "echo initializing"]
+
+Used for:
+
+DB migrations
+
+Wait for service
+
+Pre-configuration
+
+📦 C. Volumes (Pod Level)
+volumes:
+  - name: config
+    configMap:
+      name: my-config
+🔹 Volume Types
+Type	Use
+emptyDir	Temporary storage
+hostPath	Node filesystem
+configMap	Mount config
+secret	Mount secret
+persistentVolumeClaim	Use PV
+projected	Combine sources
+downwardAPI	Pod metadata
+
+🌐 D. Networking
+hostNetwork: true
+dnsPolicy: ClusterFirst
+hostname:
+subdomain:
+Field	Purpose
+hostNetwork	Use node network
+dnsPolicy	DNS config
+hostname	Custom hostname
+
+🎯 E. Scheduling Controls
+nodeSelector:
+nodeName:
+affinity:
+tolerations:
+priorityClassName:
+🔹 1. nodeSelector
+nodeSelector:
+  disktype: ssd
+🔹 2. Affinity
+affinity:
+  nodeAffinity:
+  podAffinity:
+  podAntiAffinity:
+🔹 3. Tolerations
+tolerations:
+  - key: "key1"
+    operator: "Equal"
+    value: "value1"
+    effect: "NoSchedule"
+
+🔐 F. Pod Security Context (Pod Level)
+securityContext:
+  runAsUser: 1000
+  fsGroup: 2000
+
+⏱ G. Restart Policy
+restartPolicy: Always | OnFailure | Never
+
+🚦 H. Service Account
+serviceAccountName: my-sa
+automountServiceAccountToken: false
+
+⏳ I. Termination Settings
+terminationGracePeriodSeconds: 30
+activeDeadlineSeconds: 100
+
+📊 J. Runtime Class
+runtimeClassName: gvisor
+
+🧬 K. Host Aliases
+hostAliases:
+  - ip: "127.0.0.1"
+    hostnames:
+      - "myapp.local"
+
+🧾 Full Real-World Example
+apiVersion: v1
+kind: Pod
+metadata:
+  name: advanced-pod
+  labels:
+    app: demo
+spec:
+  restartPolicy: Always
+  serviceAccountName: my-sa
+  nodeSelector:
+    disktype: ssd
+
+  containers:
+  - name: app
+    image: nginx:1.25
+    ports:
+      - containerPort: 80
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+    env:
+      - name: ENV
+        value: production
+    volumeMounts:
+      - name: config
+        mountPath: /etc/config
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+
+  volumes:
+    - name: config
+      configMap:
+        name: my-config
