@@ -1,0 +1,312 @@
+I’ll explain this step-by-step from:
+
+kubectl apply
+   ↓
+API Server
+   ↓
+Scheduler
+   ↓
+Kubelet
+   ↓
+Container Runtime (containerd)
+   ↓
+Linux Kernel (cgroups)
+
+We’ll focus specifically on the resources section you defined.
+
+✅ Your YAML (Important Part)
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    memory: "256Mi"
+    cpu: "300m"
+
+This means:
+
+Minimum guaranteed:
+
+0.1 CPU core
+
+128Mi memory
+
+Maximum allowed:
+
+0.3 CPU core
+
+256Mi memory
+
+🚀 STEP 1 — kubectl apply
+
+You run:
+
+kubectl apply -f login-pod.yaml
+What happens:
+
+YAML → converted to JSON
+
+Sent to API server
+
+API server validates schema
+
+Defaults applied (restartPolicy=Always)
+
+Stored in etcd
+
+At this point:
+
+👉 Pod exists in cluster
+👉 But NOT scheduled yet
+
+🧠 STEP 2 — Scheduler Looks at Requests
+
+Scheduler ONLY looks at:
+
+requests:
+
+It completely ignores limits.
+
+🔎 Why?
+
+Because scheduler decides:
+
+“Can this node support this pod?”
+
+It checks:
+
+Node Allocatable CPU
+Node Allocatable Memory
+
+Example node:
+
+Allocatable:
+  cpu: 2 cores
+  memory: 7.5Gi
+
+Now scheduler checks:
+
+Is 100m CPU available?
+Is 128Mi memory available?
+
+If yes → pod assigned to node.
+
+Important:
+
+Scheduler subtracts request from available pool
+
+It does NOT reserve limits
+
+It does NOT look at actual usage
+
+So now node’s accounting becomes:
+
+CPU allocated: +100m
+Memory allocated: +128Mi
+📦 STEP 3 — Pod Assigned to Node
+
+Scheduler writes:
+
+spec.nodeName = gke-node-xyz
+
+Now kubelet on that node takes over.
+
+⚙️ STEP 4 — Kubelet Prepares Container
+
+Kubelet reads:
+
+limits:
+  cpu: "300m"
+  memory: "256Mi"
+
+Now kubelet tells container runtime:
+
+“Start container with these cgroup limits.”
+
+🧱 STEP 5 — containerd Creates cgroups
+
+Linux uses cgroups to enforce limits.
+
+Two important settings are created:
+
+🔹 Memory Limit Enforcement
+
+Kernel sets:
+
+memory.limit_in_bytes = 256Mi
+
+That means:
+
+👉 Container CANNOT use more than 256Mi RAM.
+
+If container tries to allocate 300Mi:
+
+Kernel detects violation
+
+OOM Killer triggered
+
+Container killed
+
+Pod restarts (because restartPolicy=Always)
+
+You would see:
+
+Reason: OOMKilled
+🔹 CPU Limit Enforcement
+
+CPU is different.
+
+Kernel sets:
+
+cpu.cfs_quota_us
+cpu.cfs_period_us
+
+For 300m CPU:
+
+It calculates:
+
+0.3 CPU core worth of time per scheduling period
+
+Meaning:
+
+Container can only run 30% of a single core continuously.
+
+If it tries to use more:
+
+👉 It is throttled
+👉 Not killed
+👉 Slows down
+
+You can see this in:
+
+kubectl top pod login-pod
+🧠 STEP 6 — What If Container Uses Less?
+
+If container uses:
+
+50Mi memory → fine
+
+100m CPU → fine
+
+Unused memory and CPU remain available to others.
+
+🧠 STEP 7 — What If Container Uses Between Request and Limit?
+
+Example:
+
+Uses 200Mi memory
+
+Uses 250m CPU
+
+This is allowed.
+
+Because:
+
+Request = scheduling guarantee
+
+Limit = enforcement boundary
+
+🚨 STEP 8 — What Happens Under Node Memory Pressure?
+
+Suppose node memory is full.
+
+Kubernetes evicts pods in this order:
+
+1️⃣ BestEffort
+2️⃣ Burstable
+3️⃣ Guaranteed
+
+Your pod is:
+
+Burstable
+
+Because:
+
+requests != limits
+
+So:
+
+It is safer than BestEffort
+
+But not safest
+
+🧮 STEP 9 — QoS Class Calculation
+
+Kubernetes checks:
+
+Do all containers have:
+
+requests == limits for CPU AND memory?
+
+If yes → Guaranteed
+If partial → Burstable
+If none → BestEffort
+
+Your pod:
+
+cpu request: 100m
+cpu limit:   300m
+memory request: 128Mi
+memory limit:   256Mi
+
+Not equal → Burstable
+
+You can verify:
+
+kubectl describe pod login-pod
+
+Look for:
+
+QoS Class: Burstable
+🔥 Important Hidden Behavior
+
+CPU is compressible resource
+Memory is non-compressible
+
+Meaning:
+
+CPU → throttled
+
+Memory → killed
+
+🏗 Internal Flow Diagram
+kubectl apply
+   ↓
+API Server validates + stores
+   ↓
+Scheduler checks requests only
+   ↓
+Pod assigned to node
+   ↓
+Kubelet reads limits
+   ↓
+containerd creates cgroups
+   ↓
+Linux kernel enforces CPU + memory
+🎯 Real-World Practical Result
+
+With your config:
+
+Scenario	Result
+High traffic spike	CPU throttled at 300m
+Memory leak	Container killed at 256Mi
+Normal load	Runs fine
+Node memory pressure	Evicted after BestEffort pods
+🧠 Deep Minute Detail
+
+Important subtle behavior:
+
+Scheduler only accounts requests, not limits.
+
+So if you deploy many pods:
+
+Each request 128Mi
+Each limit 256Mi
+
+Node could be fully scheduled at 4Gi requests.
+
+But if all pods actually use their limit (256Mi):
+
+Node may exceed physical memory → OOM pressure → evictions.
+
+This is called memory overcommit.
