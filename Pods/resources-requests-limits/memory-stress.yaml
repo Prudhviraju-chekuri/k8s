@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   name: mem-stress
 spec:
-  nodeName: <PASTE_NODE_NAME_HERE>
+  nodeName: gke-prudhvi-k8s-cluster-default-pool-fa0e5463-r5qn
   containers:
   - name: stress
     image: polinux/stress
