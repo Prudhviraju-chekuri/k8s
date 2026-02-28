@@ -1,0 +1,276 @@
+🔑 One-Line Summary (Keep this in mind)
+
+Probes are executed and evaluated entirely by the kubelet on the node — the scheduler and API server do NOT act on probe results.
+
+Now let’s unpack this properly.
+
+🧱 Step-by-Step: What Happens When You Define Probes
+
+We’ll follow the lifecycle from kubectl apply → actual probe execution.
+
+1️⃣ kubectl apply — API Server & etcd
+
+You apply a Pod YAML with probes:
+
+readinessProbe:
+  tcpSocket:
+    port: 80
+What happens:
+
+API server validates schema
+
+Pod spec is stored unchanged in etcd
+
+Probes are treated as data, not logic
+
+👉 No probing happens here
+
+2️⃣ Scheduler — Completely Ignored Probes ❌
+
+The scheduler looks only at:
+
+CPU requests
+
+Memory requests
+
+Node selectors / affinity
+
+Taints & tolerations
+
+Pod priority
+
+Scheduler does NOT care about:
+
+livenessProbe
+
+readinessProbe
+
+startupProbe
+
+Why?
+
+Scheduler only decides where to place the pod, not whether it’s healthy.
+
+So probes are irrelevant to scheduling.
+
+3️⃣ Pod Assigned to Node
+
+Once scheduled:
+
+Pod.spec.nodeName = node-X
+
+Now the kubelet on node-X takes over.
+
+🔥 From here on, EVERYTHING about probes is kubelet-controlled
+4️⃣ kubelet Reads Pod Spec (Including Probes)
+
+The kubelet:
+
+Watches the API server
+
+Sees a Pod assigned to itself
+
+Parses the full Pod spec
+
+Including:
+
+containers[].livenessProbe
+containers[].readinessProbe
+containers[].startupProbe
+
+👉 kubelet now knows probes exist
+
+5️⃣ kubelet Creates Containers (via containerd)
+
+kubelet:
+
+Sends container spec to containerd
+
+containerd → runc → kernel
+
+Container starts
+
+At this point:
+
+NO probes have run yet
+
+Container just started
+
+6️⃣ kubelet Starts Probe Controllers (Important)
+
+Inside kubelet, there are internal probe managers:
+
+startupProbe manager
+readinessProbe manager
+livenessProbe manager
+
+Each probe becomes:
+
+A periodic task
+
+With its own timer
+
+With its own failure counters
+
+This is not Kubernetes-wide, it’s per node, per pod.
+
+7️⃣ startupProbe Logic (If Defined)
+
+If a startupProbe exists:
+
+kubelet runs ONLY startupProbe
+
+liveness & readiness are disabled
+
+kubelet waits for startup success
+
+How probe runs:
+
+kubelet executes:
+
+HTTP request OR
+
+TCP connect OR
+
+Exec command
+
+From the node, not via Service
+
+If startupProbe fails:
+
+kubelet retries
+
+If failures exceed threshold → container restarted
+
+8️⃣ readinessProbe Logic
+
+Once startupProbe passes (or if none exists):
+
+kubelet runs readinessProbe periodically.
+
+How kubelet runs it:
+
+Directly connects to:
+
+containerPort
+
+Pod IP
+
+NOT via Service
+
+NOT via NodePort
+
+Probe result is boolean:
+PASS / FAIL
+9️⃣ What kubelet Does With Readiness Results
+
+This is critical.
+
+If readinessProbe passes:
+Pod condition Ready = True
+
+kubelet:
+
+Updates Pod status in API server
+
+Endpoint controller includes Pod IP in Service endpoints
+
+If readinessProbe fails:
+Pod condition Ready = False
+
+kubelet:
+
+Updates Pod status
+
+Pod IP removed from Service endpoints
+
+Traffic stops
+
+⚠️ Container is NOT restarted
+
+10️⃣ livenessProbe Logic
+
+livenessProbe answers:
+
+“Should this container be restarted?”
+
+If livenessProbe fails:
+
+kubelet kills the container
+
+containerd restarts it
+
+Pod stays same
+
+New container instance starts
+
+This is pure self-healing.
+
+🧠 Where Probe Results Are Stored
+
+Probe results are:
+
+Evaluated by kubelet
+
+Reflected as:
+
+Pod Conditions
+
+Events
+
+Stored back in API server
+
+Example:
+
+Conditions:
+  Ready: False
+
+Events:
+
+Readiness probe failed
+❌ What Kubernetes DOES NOT Do With Probe Data
+
+Very important.
+
+Kubernetes does NOT:
+
+Reschedule the pod
+
+Move pod to another node
+
+Scale pods
+
+Change resource limits
+
+Probes only affect:
+
+Traffic routing
+
+Container restarts
+
+🧠 Component Responsibility Matrix
+Component	Role in probes
+API Server	Stores probe config
+etcd	Persists probe definition
+Scheduler	❌ Ignores probes
+kubelet	✅ Executes probes
+containerd	Restarts container when told
+Service	Uses readiness status
+Controller	Reacts indirectly (Deployments)
+🔄 Full Flow (End-to-End)
+kubectl apply
+   ↓
+API server stores pod + probes
+   ↓
+Scheduler assigns node
+   ↓
+kubelet sees pod
+   ↓
+kubelet starts container
+   ↓
+kubelet runs probes
+   ↓
+Probe result
+   ↓
+Ready? → Service routing
+Dead?  → Container restart
