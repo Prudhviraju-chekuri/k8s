@@ -23,12 +23,19 @@ spec:
     #   periodSeconds: 5
     #   failureThreshold: 3
 
-    startupProbe:
+    # startupProbe:
+    #   httpGet:
+    #     path: /healthy
+    #     port: 80
+    #   initialDelaySeconds: 5
+    #   periodSeconds: 5
+    #   failureThreshold: 3
+
+    livenessProbe:
       httpGet:
         path: /healthy
         port: 80
       initialDelaySeconds: 5
-      periodSeconds: 5
       failureThreshold: 3
 
     ports:
