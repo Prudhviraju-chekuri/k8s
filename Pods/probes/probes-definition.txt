@@ -1,0 +1,366 @@
+🔍 What are Probes in Kubernetes?
+
+A probe is a health check that Kubernetes runs inside or against a container to answer questions like:
+
+Is the container alive?
+
+Is the container ready to receive traffic?
+
+Has the application started successfully?
+
+Kubernetes uses probes to decide actions automatically (restart, route traffic, wait).
+
+🧠 Why Probes Are Needed (Real Problem)
+
+Without probes, Kubernetes assumes:
+
+“If the container process is running, the app must be healthy.”
+
+This is often wrong.
+
+Real failures that probes catch:
+
+App started but DB connection failed
+
+App stuck in deadlock
+
+App responding very slowly
+
+App crashed internally but process still running
+
+App needs warm-up time
+
+Without probes:
+
+Kubernetes keeps sending traffic to a broken app
+
+Users see errors
+
+No automatic recovery
+
+🧱 Types of Probes (3 Total)
+
+Kubernetes supports exactly three probes:
+
+livenessProbe
+
+readinessProbe
+
+startupProbe
+
+Each answers a different question.
+
+1️⃣ livenessProbe – “Should this container be restarted?”
+Purpose
+
+Detects dead or stuck applications.
+
+If this probe fails:
+➡️ Kubernetes restarts the container
+
+Example failure:
+
+Infinite loop
+
+Thread deadlock
+
+App not responding at all
+
+Important
+
+It does NOT remove traffic
+
+It kills and restarts the container
+
+2️⃣ readinessProbe – “Can this pod receive traffic?”
+Purpose
+
+Controls traffic routing.
+
+If this probe fails:
+➡️ Pod is removed from Service endpoints
+➡️ Traffic stops
+➡️ Container is NOT restarted
+
+Example failure:
+
+DB temporarily down
+
+Cache unavailable
+
+App overloaded but still running
+
+This enables graceful degradation.
+
+3️⃣ startupProbe – “Has the app finished starting?”
+Purpose
+
+For slow-starting apps.
+
+If startupProbe is defined:
+
+Kubernetes waits for it to succeed
+
+liveness & readiness are disabled until startup succeeds
+
+Example use case:
+
+Java apps
+
+Spring Boot
+
+Heavy initialization apps
+
+🔧 How Probes Check Health (Probe Types)
+
+Each probe can check health in 3 ways:
+
+1️⃣ HTTP check (most common)
+httpGet:
+  path: /health
+  port: 80
+2️⃣ TCP check
+tcpSocket:
+  port: 80
+3️⃣ Command execution
+exec:
+  command: ["cat", "/tmp/healthy"]
+🧪 What Happens If You DON’T Use Probes?
+Situation	Without Probes	With Probes
+App stuck	Kubernetes does nothing	Container restarted
+App not ready	Traffic still sent	Traffic blocked
+App crash loop	Users see errors	Auto recovery
+DB down	Errors	Traffic paused
+
+👉 Without probes, Kubernetes cannot protect users.
+
+✅ Can You Use Probes in Your login-app Pod?
+
+YES – and you SHOULD.
+
+Your app:
+
+Is an HTTP login service
+
+Exposes port 80
+
+Likely has /login or /health endpoint
+
+Perfect for probes.
+
+🧱 Recommended Probes for Your Login App
+
+Assuming your app exposes:
+
+GET /health  → returns 200 OK when healthy
+🟢 Add Probes to Your Pod YAML
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-pod
+  labels:
+    app: login-app
+spec:
+  containers:
+  - name: login-app
+    image: prchekuri/login-2514:poornima
+    ports:
+      - containerPort: 80
+
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        memory: "256Mi"
+
+    startupProbe:
+      httpGet:
+        path: /health
+        port: 80
+      failureThreshold: 30
+      periodSeconds: 5
+
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      failureThreshold: 3
+
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 80
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      failureThreshold: 3
+🧠 What Happens Internally (Step by Step)
+1️⃣ Pod starts
+
+Container starts
+
+startupProbe runs
+
+Kubernetes waits until app is ready
+
+2️⃣ Startup succeeds
+
+startupProbe stops
+
+readiness + liveness begin
+
+3️⃣ App becomes ready
+
+readinessProbe passes
+
+Pod added to Service
+
+Traffic starts
+
+4️⃣ App temporarily unhealthy
+
+readinessProbe fails
+
+Pod removed from Service
+
+No traffic sent
+
+5️⃣ App hangs or deadlocks
+
+livenessProbe fails
+
+Container restarted automatically
+
+🚦 Key Probe Parameters Explained
+Field	Meaning
+initialDelaySeconds	Wait before first check
+periodSeconds	How often to check
+timeoutSeconds	How long to wait for response
+failureThreshold	How many failures before action
+successThreshold	Success count to recover
+🎯 Best Practices (Very Important)
+
+✔ Always use readinessProbe
+✔ Use livenessProbe carefully (don’t kill slow apps)
+✔ Use startupProbe for slow startup apps
+❌ Don’t reuse the same aggressive values everywhere
+
+🎤 Interview-Ready Explanation
+
+If asked:
+
+What are probes in Kubernetes?
+
+Answer:
+
+Probes are health checks used by Kubernetes to determine container health and readiness. Liveness probes restart unhealthy containers, readiness probes control traffic routing, and startup probes handle slow application initialization.
+
+🧠 Final Mental Model
+
+startupProbe → “Are you ready to start?”
+
+readinessProbe → “Can users talk to you?”
+
+livenessProbe → “Are you still alive?”
+
+Using TCP:
+
+If your app does not expose /health (or similar), you still have safe, correct options in Kubernetes. Let’s go step by step and be very clear.
+
+🔑 First: This Is NOT a Problem
+
+Kubernetes does NOT require an HTTP health endpoint.
+
+Probes are optional, but strongly recommended.
+
+If an app has no health endpoint, Kubernetes gives you fallback probe mechanisms.
+
+✅ Option 1 (Best Immediate Option): TCP Probes
+
+Since your app:
+
+Listens on port 80
+
+Is an HTTP service
+
+You can use a TCP probe.
+
+What TCP Probe Does
+
+“Is something listening on this port?”
+
+It does not check business logic, but it’s much better than nothing.
+
+🧱 Use TCP Probes in Your Pod YAML
+readinessProbe:
+  tcpSocket:
+    port: 80
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  failureThreshold: 3
+
+livenessProbe:
+  tcpSocket:
+    port: 80
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  failureThreshold: 3
+What Happens Internally
+
+If port 80 is open → probe passes
+
+If app crashes / stops listening → probe fails
+
+Readiness failure → traffic stops
+
+Liveness failure → container restarted
+
+✅ Safe
+✅ No app change needed
+❌ Cannot detect partial failures (like DB down)
+
+✅ Option 2: Use / (Root Path) If It’s Safe
+
+If:
+
+http://<node-ip>:30007/
+
+returns 200 OK reliably and cheaply, you can use /.
+
+Example
+readinessProbe:
+  httpGet:
+    path: /
+    port: 80
+  periodSeconds: 5
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: 80
+  initialDelaySeconds: 15
+
+⚠️ Only do this if:
+
+/ does not trigger login logic
+
+/ does not hit DB heavily
+
+/ does not require auth
+
+❌ What You Should NOT Do
+
+❌ Don’t use /login
+❌ Don’t use endpoints that modify state
+❌ Don’t use endpoints requiring authentication
+❌ Don’t use heavy DB queries
+
+Probes must be:
+
+Fast
+
+Idempotent
+
+Side-effect free
