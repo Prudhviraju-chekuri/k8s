@@ -15,13 +15,13 @@ spec:
       limits:
         memory: "256Mi"
         cpu: "300m"
-    readinessProbe:
-      httpGet:
-        path: /healthy
-        port: 80
-      initialDelaySeconds: 5
-      periodSeconds: 5
-      failureThreshold: 3
+    # readinessProbe:
+    #   httpGet:
+    #     path: /healthy
+    #     port: 80
+    #   initialDelaySeconds: 5
+    #   periodSeconds: 5
+    #   failureThreshold: 3
 
     ports:
       - containerPort: 80
