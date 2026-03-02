@@ -1,0 +1,302 @@
+🔹 Environment Variables in Pod — Big Picture
+
+Environment variables are injected by kubelet at container start time.
+
+Once the container starts:
+
+env vars are static
+
+changing ConfigMap/Secret does NOT change env vars (restart needed)
+
+Where env vars live
+
+Inside the container process:
+
+printenv
+
+They are not Kubernetes magic at runtime — just normal Linux process env vars.
+
+🔹 1️⃣ Literal values (Hardcoded)
+When to use
+
+Simple flags
+
+Environment name
+
+Feature toggles
+
+YAML (add to your login-pod)
+env:
+  - name: ENV
+    value: prod
+  - name: APP_NAME
+    value: login-app
+What happens internally
+
+kubelet reads env
+
+passes key/value to container runtime
+
+runtime sets process environment
+
+app reads it via process.env / getenv
+
+✔ Simplest
+❌ Not reusable
+❌ Not secure
+
+🔹 2️⃣ ConfigMap (Centralized config)
+When to use
+
+App configuration
+
+URLs, timeouts, flags
+
+Non-sensitive data
+
+Step A: Create ConfigMap
+kubectl create configmap login-config \
+  --from-literal=APP_MODE=production \
+  --from-literal=LOG_LEVEL=info
+Step B: Use it via envFrom
+envFrom:
+  - configMapRef:
+      name: login-config
+Result inside container
+APP_MODE=production
+LOG_LEVEL=info
+Internal behavior
+
+kubelet fetches ConfigMap from API server
+
+expands each key into env var
+
+injects before container start
+
+✔ Clean
+✔ Reusable
+✔ Recommended
+
+🔹 ConfigMap via env (single key)
+env:
+  - name: LOG_LEVEL
+    valueFrom:
+      configMapKeyRef:
+        name: login-config
+        key: LOG_LEVEL
+
+Use this when:
+
+you want custom env var names
+
+you want only one key
+
+🔹 3️⃣ Secret (Sensitive data)
+When to use
+
+Passwords
+
+Tokens
+
+API keys
+
+Step A: Create Secret
+kubectl create secret generic login-secret \
+  --from-literal=DB_PASSWORD=supersecret
+Step B: Inject into your pod
+envFrom:
+  - secretRef:
+      name: login-secret
+
+or single key:
+
+env:
+  - name: DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: login-secret
+        key: DB_PASSWORD
+Important truth (no sugarcoating)
+
+Secrets are base64, not encrypted by default
+
+Anyone with API access can read them
+
+Still better than hardcoding
+
+🔹 4️⃣ FieldRef (Pod & Node metadata)
+
+This is very powerful and often underused.
+
+When to use
+
+Pod name
+
+Namespace
+
+Node name
+
+Pod IP
+
+Labels
+
+Example using your login-pod
+env:
+  - name: POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+
+  - name: POD_NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+
+  - name: NODE_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: spec.nodeName
+
+  - name: POD_IP
+    valueFrom:
+      fieldRef:
+        fieldPath: status.podIP
+Internal behavior
+
+kubelet resolves these values at runtime
+
+No API calls from the container
+
+Values are injected once
+
+✔ Zero config objects
+✔ No secrets needed
+✔ Great for logging, tracing
+
+🔹 5️⃣ ResourceFieldRef (CPU & Memory info)
+
+This exposes container resource settings to the app.
+
+When to use
+
+JVM heap sizing
+
+Worker auto-tuning
+
+Adaptive apps
+
+Example (matches your login-pod resources)
+env:
+  - name: CPU_REQUEST
+    valueFrom:
+      resourceFieldRef:
+        resource: requests.cpu
+
+  - name: MEMORY_LIMIT
+    valueFrom:
+      resourceFieldRef:
+        resource: limits.memory
+Inside container
+CPU_REQUEST=100m
+MEMORY_LIMIT=256Mi
+Internal behavior
+
+kubelet reads container spec
+
+resolves numeric values
+
+injects as strings
+
+✔ Very useful
+✔ Advanced but powerful
+
+🔹 FULL Working Example (Login Pod)
+
+Here is a single Pod YAML that uses all sources together:
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-pod
+  labels:
+    app: login-app
+spec:
+  containers:
+  - name: login-app
+    image: prchekuri/login-2514:poornima
+
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "300m"
+        memory: "256Mi"
+
+    env:
+      - name: ENV
+        value: prod
+
+      - name: POD_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+
+      - name: NODE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.nodeName
+
+      - name: MEMORY_LIMIT
+        valueFrom:
+          resourceFieldRef:
+            resource: limits.memory
+
+    envFrom:
+      - configMapRef:
+          name: login-config
+      - secretRef:
+          name: login-secret
+
+    ports:
+      - containerPort: 80
+🔍 How to Verify Everything
+kubectl exec -it login-pod -- printenv | sort
+
+You will see:
+
+Literal vars
+
+ConfigMap vars
+
+Secret vars
+
+Pod metadata
+
+Resource values
+
+🧠 Internal Flow (Important)
+kubectl apply
+   ↓
+API server stores Pod spec
+   ↓
+kubelet reads Pod spec
+   ↓
+kubelet resolves env sources
+   ↓
+container runtime injects env vars
+   ↓
+process starts with env
+
+After start → env vars are immutable.
+
+🎯 When to use what (Quick table)
+Source	Use case
+literal	simple flags
+ConfigMap	app config
+Secret	sensitive data
+FieldRef	pod/node info
+ResourceFieldRef	resource-aware apps
+🧠 Final takeaway (remember this)
+
+Environment variables are resolved by kubelet before the container starts — after that, Kubernetes is out of the picture.
