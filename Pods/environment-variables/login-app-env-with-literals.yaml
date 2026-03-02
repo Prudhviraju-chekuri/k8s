@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-pod
+  labels:
+    app: login-app
+spec:
+  containers:
+  - name: login-app
+    image: prchekuri/login-2514:poornima
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        memory: "256Mi"
+        cpu: "300m"
+    env:
+      - name: ENV
+        value: testing
+      - name: APP_NAME
+        value: login-app
+    ports:
+      - containerPort: 80
