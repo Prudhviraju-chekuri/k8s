@@ -17,7 +17,7 @@ spec:
         cpu: "300m"
     envFrom:
       - configMapRef:
-        name: login-config
+          name: login-config
     env:
       - name: ENV
         valueFrom:
