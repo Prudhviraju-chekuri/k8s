@@ -52,6 +52,14 @@ spec:
         valueFrom:
           fieldRef:
             fieldPath: status.podIP
+      - name: CPU_REQUEST
+        valueFrom:
+          resourceFieldRef:
+            resource: request.cpu
+      - name: MEM_LIMIT
+        valueFrom:
+          resourceFieldRef:
+            resource: limits.memory
 
     ports:
       - containerPort: 80
