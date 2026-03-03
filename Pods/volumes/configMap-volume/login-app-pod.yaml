@@ -23,5 +23,5 @@ spec:
   volumes: 
     - name: html-volume
       configMap:
-        name: html
+        name: login-html-cm
 
