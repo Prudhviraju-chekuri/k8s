@@ -1,0 +1,299 @@
+🔹 1️⃣ Why Volume Mounts Are Required
+
+Containers are ephemeral:
+
+When container restarts → its writable layer is wiped
+
+When pod is deleted → data is gone
+
+Env vars are static at start time
+
+So we need volumes when:
+
+Problem	Solution
+Persist data	Volume
+Share data between containers	Volume
+Inject config files	Volume
+Inject secrets	Volume
+Dynamic config updates	Volume
+🔹 2️⃣ What Is a Volume in Kubernetes?
+
+A volume has two parts:
+
+1️⃣ Defined at Pod level
+volumes:
+  - name: config
+    configMap:
+      name: login-config
+2️⃣ Mounted inside container
+volumeMounts:
+  - name: config
+    mountPath: /etc/config
+
+Think of it like:
+
+Pod defines storage
+Container mounts it
+🔹 3️⃣ What Actually Happens Internally
+
+Let’s follow the flow:
+
+Step 1 — Pod YAML applied
+
+API server stores volume definition.
+
+Step 2 — Pod scheduled
+
+Scheduler ignores volumes unless PVC is involved.
+
+Step 3 — kubelet on node handles volumes
+
+kubelet:
+
+Creates a directory under:
+
+/var/lib/kubelet/pods/<podUID>/volumes/
+
+Fetches ConfigMap / Secret from API server
+
+Writes data into files
+
+Mounts it into container using container runtime
+
+So:
+
+Volume is prepared by kubelet
+Mounted into container namespace
+
+Container sees it as normal filesystem.
+
+🔹 4️⃣ Types of Volumes (Important)
+
+Common ones:
+
+Type	Purpose
+emptyDir	Temporary storage
+configMap	Inject config files
+secret	Inject secrets
+hostPath	Mount host file (testing only)
+persistentVolumeClaim	Real storage (DBs etc.)
+🔹 5️⃣ Can You Use Volume Mounts for Your Login App?
+
+Yes — PERFECT use case.
+
+Your nginx image serves files from:
+
+/usr/share/nginx/html
+
+So we can:
+
+Replace index.html using ConfigMap
+
+Mount custom config
+
+Inject secret as file
+
+This is the best learning example.
+
+🔥 Example 1 — Mount ConfigMap as Files (Best Learning Example)
+Step 1 — Create ConfigMap with file
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: login-html
+data:
+  index.html: |
+    <html>
+      <body>
+        <h1>Login App - ConfigMap Version</h1>
+      </body>
+    </html>
+
+Apply it:
+
+kubectl apply -f login-html-configmap.yaml
+Step 2 — Modify Login Pod YAML
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-pod
+spec:
+  containers:
+  - name: login-app
+    image: prchekuri/login-2514:poornima
+
+    volumeMounts:
+      - name: html-volume
+        mountPath: /usr/share/nginx/html
+
+  volumes:
+    - name: html-volume
+      configMap:
+        name: login-html
+What happens now?
+
+kubelet:
+
+Fetches ConfigMap
+
+Writes:
+
+index.html
+
+Mounts it at:
+
+/usr/share/nginx/html
+
+nginx now serves your new HTML
+
+No image rebuild required.
+
+🔹 Example 2 — Mount Secret as File
+volumes:
+  - name: secret-volume
+    secret:
+      secretName: login-secret
+
+Mount:
+
+volumeMounts:
+  - name: secret-volume
+    mountPath: /etc/secrets
+    readOnly: true
+
+Inside container:
+
+/etc/secrets/DB_PASSWORD1
+/etc/secrets/DB_PASSWORD2
+
+Secret is exposed as files.
+
+🔹 Example 3 — emptyDir (Temporary Storage)
+volumes:
+  - name: temp-storage
+    emptyDir: {}
+
+Mounted:
+
+volumeMounts:
+  - name: temp-storage
+    mountPath: /tmp/data
+
+Behavior:
+
+Lives as long as pod lives
+
+Deleted when pod deleted
+
+Shared across containers in same pod
+
+🔹 Important Difference: Env vs Volume
+Feature	env	Volume
+Dynamic updates	❌ No	✅ Yes (ConfigMap/Secret)
+Suitable for large config	❌ No	✅ Yes
+Binary data	❌ No	✅ Yes
+Structured files	❌ No	✅ Yes
+🔥 CRITICAL Learning
+
+If you update a ConfigMap:
+
+With env:
+
+Pod must restart.
+
+With volume:
+
+Files update automatically (within ~1 minute).
+
+That is a huge difference.
+
+🔹 What Kubernetes Does Behind the Scenes
+
+For ConfigMap/Secret volumes:
+
+kubelet runs a sync loop:
+
+Watches for updates
+
+Rewrites files atomically
+
+Updates symlink to new version
+
+Inside container:
+
+Files appear updated
+
+No restart required
+
+This is very powerful.
+
+🔹 When to Use Volume Mounts
+
+Use volumes when:
+
+App reads config from file
+
+You need TLS certificates
+
+You want dynamic updates
+
+You want persistent data
+
+Multiple containers need shared storage
+
+🔹 When NOT to Use
+
+Don’t use volumes for:
+
+Simple flags (use env)
+
+Small config values
+
+One-time immutable settings
+
+🎯 Real Production Pattern
+
+Modern apps often:
+
+Use env for small config
+
+Use volume for certificates
+
+Use PVC for databases
+
+Use emptyDir for temp cache
+
+🔥 Final Clean Login Pod Example (Best Learning Version)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-pod
+spec:
+  containers:
+  - name: login-app
+    image: prchekuri/login-2514:poornima
+
+    volumeMounts:
+      - name: html-volume
+        mountPath: /usr/share/nginx/html
+
+      - name: secret-volume
+        mountPath: /etc/secrets
+        readOnly: true
+
+  volumes:
+    - name: html-volume
+      configMap:
+        name: login-html
+
+    - name: secret-volume
+      secret:
+        secretName: login-secret
+🧠 Final Mental Model
+Pod defines volumes
+kubelet prepares storage
+container mounts it
+container sees normal files
+🎯 One-Line Summary
+
+VolumeMounts allow you to inject files or storage into containers, managed entirely by kubelet at the node level.
