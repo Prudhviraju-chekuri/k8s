@@ -28,9 +28,9 @@ spec:
     command: ["/bin/sh", "-c"]
     args:
       - while true; do
-          date >> /tmp/contb/time-log.txt
-          echo "writing to shared storage"
-          sleep 5
+          date >> /tmp/contb/time-log.txt;
+          echo "writing to shared storage";
+          sleep 5;
         done
     volumeMounts:
       - name: login-shared-storage
