@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: login-app-emptyDir-Volume
+  name: login-app-emptyDir-volume
   labels:
     app: login-app
 spec:
