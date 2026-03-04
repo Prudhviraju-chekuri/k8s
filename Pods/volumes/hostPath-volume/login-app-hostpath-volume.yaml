@@ -23,6 +23,6 @@ spec:
   volumes: 
     - name: host-logs
       hostPath:
-        path: /data/login-app-logs
+        path: /var/log/login-app
         type: DirectoryOrCreate
 
