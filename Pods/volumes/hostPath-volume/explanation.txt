@@ -1,0 +1,280 @@
+hostPath is one of the most powerful but also most dangerous volume types in Kubernetes, so understanding it clearly is important.
+
+I’ll explain it step-by-step.
+
+1️⃣ What is a hostPath Volume?
+
+A hostPath volume mounts a directory or file from the Kubernetes node (host machine) directly into a container.
+
+So instead of Kubernetes creating storage (like emptyDir), you use an existing path on the node.
+
+Example:
+
+volumes:
+- name: host-storage
+  hostPath:
+    path: /data/logs
+    type: Directory
+
+Then mount it:
+
+volumeMounts:
+- name: host-storage
+  mountPath: /app/logs
+
+Now:
+
+Node path          Container path
+/data/logs   →     /app/logs
+
+They are the same directory.
+
+2️⃣ What Happens Internally
+
+Suppose your pod runs on Node-1.
+
+Kubelet does something like this:
+
+Node filesystem
+/data/logs
+
+Then the container runtime bind mounts it:
+
+Container
+/app/logs → /data/logs
+
+So if the container writes:
+
+/app/logs/file.txt
+
+It actually writes to:
+
+/data/logs/file.txt on the node
+
+No copying is involved.
+
+3️⃣ Why hostPath Exists
+
+Sometimes containers need direct access to node resources.
+
+Examples:
+
+Node log files
+
+Docker runtime files
+
+kubelet directories
+
+device files
+
+system sockets
+
+These files exist only on the node, not inside the container image.
+
+So Kubernetes allows mounting them.
+
+4️⃣ Important Difference vs emptyDir
+Feature	emptyDir	hostPath
+Storage location	Created by kubelet	Already exists on node
+Shared between containers	Yes	Yes
+Persistent after pod deletion	❌ No	✅ Yes
+Node dependent	❌ No	⚠️ Yes
+Security risk	Low	High
+5️⃣ Real Production Use Cases
+1️⃣ Log collectors (Very common)
+
+Tools like:
+
+Fluentd
+
+Filebeat
+
+Promtail
+
+Need access to node logs:
+
+/var/log/containers
+/var/log/pods
+
+So they mount:
+
+hostPath: /var/log
+
+This allows them to collect logs from all pods.
+
+2️⃣ Monitoring tools
+
+Tools like:
+
+Prometheus Node Exporter
+
+Need access to:
+
+/proc
+/sys
+/dev
+
+Example:
+
+hostPath:
+  path: /proc
+
+Used to collect CPU/memory stats.
+
+3️⃣ Kubernetes system components
+
+Some system pods need access to:
+
+/var/lib/kubelet
+/var/run/containerd
+
+So they use hostPath.
+
+4️⃣ Accessing Docker socket
+
+Some build tools need:
+
+/var/run/docker.sock
+
+Mounted as hostPath.
+
+This allows containers to control Docker.
+
+6️⃣ Why hostPath is Dangerous ⚠️
+
+Because it exposes the node filesystem.
+
+Example:
+
+If a container mounts:
+
+/etc
+
+The container can read:
+
+/etc/passwd
+/etc/shadow
+
+Even worse:
+
+/var/lib/kubelet
+
+A malicious container could control the node.
+
+So:
+
+hostPath breaks Kubernetes isolation.
+
+For this reason it is rarely allowed in production clusters unless necessary.
+
+7️⃣ hostPath Example With Your Login App
+
+Suppose you want your login app to store logs on the node disk.
+
+Node directory:
+
+/data/login-app-logs
+
+Pod YAML:
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-app-hostpath
+spec:
+  volumes:
+  - name: host-logs
+    hostPath:
+      path: /data/login-app-logs
+      type: DirectoryOrCreate
+
+  containers:
+  - name: login-app
+    image: prchekuri/login-2514:poornima
+
+    volumeMounts:
+    - name: host-logs
+      mountPath: /usr/share/nginx/html/logs
+
+    ports:
+    - containerPort: 80
+8️⃣ What Happens Now
+
+If your container writes:
+
+/usr/share/nginx/html/logs/app.log
+
+That file is actually stored on the node:
+
+/data/login-app-logs/app.log
+
+If the pod dies, the file still exists.
+
+9️⃣ hostPath Types
+
+You can control what must exist on the node:
+
+Type	Meaning
+Directory	must exist
+DirectoryOrCreate	create if missing
+File	must exist
+FileOrCreate	create if missing
+Socket	unix socket
+CharDevice	device file
+BlockDevice	block device
+
+Example:
+
+hostPath:
+  path: /data/app
+  type: DirectoryOrCreate
+🔟 Major Limitation
+
+Pods using hostPath are node dependent.
+
+Example:
+
+hostPath: /data/app
+
+If the pod moves to another node:
+
+/data/app
+
+may not exist.
+
+This breaks portability.
+
+That is why hostPath is not used for application storage.
+
+Instead we use:
+
+PersistentVolume
+PersistentVolumeClaim
+1️⃣1️⃣ When Should You Use hostPath?
+
+Use it when a container needs direct access to the node filesystem.
+
+Examples:
+
+log collectors
+
+monitoring agents
+
+debugging tools
+
+device plugins
+
+CSI drivers
+
+Not for normal app storage.
+
+1️⃣2️⃣ Final Comparison
+Volume	Purpose
+emptyDir	temporary pod storage
+hostPath	access node filesystem
+configMap	config files
+secret	sensitive data
+PVC	persistent storage
+✔️ Simple Mental Model
+emptyDir  → storage created for pod
+hostPath  → mount something from the node
