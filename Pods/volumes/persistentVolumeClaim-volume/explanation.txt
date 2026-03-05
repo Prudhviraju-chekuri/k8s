@@ -1,0 +1,566 @@
+Persistent storage is one of the most important Kubernetes concepts. To understand PersistentVolumeClaim (PVC) clearly, we need to see the problem it solves first, then how Kubernetes designed the solution.
+
+1️⃣ The Problem Kubernetes Needed to Solve
+
+Pods are ephemeral.
+
+When a pod is deleted or rescheduled:
+
+emptyDir data is lost
+
+container filesystem is lost
+
+hostPath ties storage to a specific node
+
+Example:
+
+Your login app stores user uploads:
+
+/usr/share/nginx/html/uploads
+
+If the pod restarts on another node:
+
+uploads folder disappears
+
+This is unacceptable for real applications.
+
+So Kubernetes introduced persistent storage abstraction.
+
+2️⃣ The Kubernetes Storage Model
+
+Kubernetes separates storage into three layers.
+
+Application Pod
+      ↓
+PersistentVolumeClaim (PVC)
+      ↓
+PersistentVolume (PV)
+      ↓
+Actual Storage
+
+Example real storage:
+
+AWS EBS
+
+GCP Persistent Disk
+
+Azure Disk
+
+NFS server
+
+Ceph
+
+local disk
+
+3️⃣ What is a PersistentVolume (PV)
+
+A PersistentVolume is a cluster storage resource.
+
+Think of it like:
+
+A disk available in the Kubernetes cluster
+
+Example:
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: login-pv
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/login-storage
+
+This means:
+
+A 5GB storage volume exists in the cluster
+
+But applications do not use PV directly.
+
+4️⃣ What is a PersistentVolumeClaim (PVC)
+
+A PersistentVolumeClaim is a request for storage by a pod.
+
+Think of it like:
+
+Pod: "I need 5GB of storage"
+
+Example PVC:
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: login-storage-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+The PVC asks Kubernetes:
+
+Give me 5GB persistent storage
+5️⃣ How Kubernetes Connects Them
+
+When PVC is created:
+
+1️⃣ Kubernetes looks for a matching PV
+2️⃣ If found → binds PV to PVC
+
+PVC  ───────────→  PV
+
+Now the PVC owns that storage.
+
+6️⃣ Pod Uses the PVC
+
+Pods mount PVC, not PV.
+
+Example with your login app:
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-app
+spec:
+  containers:
+  - name: login-app
+    image: prchekuri/login-2514:poornima
+
+    volumeMounts:
+    - name: login-storage
+      mountPath: /usr/share/nginx/html/uploads
+
+  volumes:
+  - name: login-storage
+    persistentVolumeClaim:
+      claimName: login-storage-claim
+
+Now the folder:
+
+/usr/share/nginx/html/uploads
+
+is backed by persistent storage.
+
+7️⃣ What Happens When Pod Dies
+
+If pod is deleted:
+
+Pod deleted ❌
+PVC remains ✅
+PV remains ✅
+Data remains ✅
+
+When a new pod mounts the same PVC:
+
+Data reappears
+
+That is persistent storage.
+
+8️⃣ Dynamic Provisioning (Most Common Today)
+
+In modern clusters you do not create PV manually.
+
+Instead you use a StorageClass.
+
+Flow:
+
+PVC created
+     ↓
+StorageClass provisions disk automatically
+     ↓
+PV created automatically
+
+Example PVC:
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: login-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+
+In GKE this creates:
+
+GCP Persistent Disk
+
+automatically.
+
+9️⃣ Access Modes
+
+PVC must define how the storage is accessed.
+
+Mode	Meaning
+ReadWriteOnce (RWO)	One node can mount read/write
+ReadOnlyMany (ROX)	Many nodes read-only
+ReadWriteMany (RWX)	Many nodes read/write
+
+Example:
+
+AWS EBS → RWO
+NFS → RWX
+🔟 PVC Lifecycle
+PVC Created
+     ↓
+Kubernetes finds PV
+     ↓
+Binding occurs
+     ↓
+Pod mounts PVC
+     ↓
+Pod deleted
+     ↓
+PVC still exists
+     ↓
+PV reclaimed based on policy
+
+Reclaim policy:
+
+Retain
+Delete
+Recycle (deprecated)
+1️⃣1️⃣ Real World Example With Your Login App
+
+Imagine your login app stores uploaded profile pictures.
+
+Without PVC:
+
+Pod restart → images lost
+
+With PVC:
+
+uploads/
+  user1.jpg
+  user2.jpg
+
+Even if pod restarts:
+
+images remain
+1️⃣2️⃣ Comparison of Storage Types
+Volume	Persistence
+emptyDir	Pod lifetime
+hostPath	Node lifetime
+PVC	Cluster storage lifetime
+1️⃣3️⃣ Mental Model
+
+Think of PVC like ordering storage from the cluster.
+
+Pod → PVC → PV → Disk
+
+Pod does not care where the disk lives.
+
+Kubernetes handles it.
+
+1️⃣4️⃣ Why Kubernetes Uses PVC Instead of Direct PV
+
+It separates concerns:
+
+Storage Admin:
+
+creates PV
+
+Developers:
+
+request PVC
+
+Pods remain portable.
+
+✅ Final Simple Definition
+
+A PersistentVolumeClaim (PVC) is:
+
+A request made by a pod for persistent storage in the Kubernetes cluster.
+
+It allows pods to use storage without knowing where or how it is provided.
+
+
+
+Let’s go deeper and see what actually happens inside GKE when you create a PersistentVolumeClaim (PVC). This will connect Kubernetes concepts to real cloud infrastructure.
+
+We’ll walk through the exact internal sequence.
+
+1️⃣ Starting Point: You Create a PVC
+
+Example PVC:
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: login-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+
+When you run:
+
+kubectl apply -f pvc.yaml
+
+Kubernetes stores the object in:
+
+etcd
+
+But at this point no disk exists yet.
+
+2️⃣ StorageClass Controls How Storage Is Created
+
+The PVC references:
+
+storageClassName: standard
+
+Let’s inspect it in your cluster:
+
+kubectl get storageclass
+
+Typical GKE output:
+
+NAME                 PROVISIONER
+standard (default)   pd.csi.storage.gke.io
+
+This means:
+
+Google Persistent Disk CSI driver
+
+will provision storage.
+
+3️⃣ Dynamic Provisioning Begins
+
+Kubernetes controller sees:
+
+New PVC created
+
+The external provisioner for the storage class wakes up.
+
+In GKE this is:
+
+GCE Persistent Disk CSI Driver
+
+It performs these steps.
+
+4️⃣ Cloud Disk Is Created in GCP
+
+The CSI driver calls the Google Cloud API.
+
+Equivalent to running:
+
+gcloud compute disks create
+
+A disk is created like:
+
+Name: pvc-8b9f1d2a
+Size: 5GB
+Type: pd-standard
+Zone: us-central1-a
+
+Now a real disk exists in your cloud account.
+
+5️⃣ Kubernetes Creates a PersistentVolume (PV)
+
+After disk creation Kubernetes creates a PV automatically.
+
+Example PV:
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pvc-8b9f1d2a
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  csi:
+    driver: pd.csi.storage.gke.io
+
+This PV represents the real GCP disk.
+
+6️⃣ PVC and PV Binding
+
+Now Kubernetes binds them.
+
+PVC  ───────────→  PV
+login-storage       pvc-8b9f1d2a
+
+Check with:
+
+kubectl get pvc
+kubectl get pv
+
+Example:
+
+PVC STATUS: Bound
+7️⃣ Pod Uses the PVC
+
+Now your Pod YAML:
+
+volumes:
+- name: login-storage
+  persistentVolumeClaim:
+    claimName: login-storage
+
+When the pod is scheduled, something important happens.
+
+8️⃣ Disk Is Attached to the Node
+
+Suppose scheduler chooses:
+
+Node: gke-node-2
+
+Kubernetes attaches the disk to that node.
+
+Equivalent GCP operation:
+
+gcloud compute instances attach-disk
+
+Now the node sees a new device:
+
+/dev/sdb
+9️⃣ kubelet Mounts the Disk
+
+kubelet then:
+
+1️⃣ formats the disk (if new)
+
+ext4
+
+2️⃣ mounts it:
+
+/var/lib/kubelet/plugins/kubernetes.io/csi/pv/<volume-id>
+🔟 Container Runtime Mounts It Into the Pod
+
+Finally the container runtime bind-mounts it into the container.
+
+Example:
+
+Node mount:
+/var/lib/kubelet/.../pv-xyz
+        ↓
+Container:
+/usr/share/nginx/html/uploads
+
+Now your application can read/write files.
+
+1️⃣1️⃣ Data Flow Visualization
+Container
+   ↓
+mountPath
+   ↓
+Pod volume
+   ↓
+PersistentVolumeClaim
+   ↓
+PersistentVolume
+   ↓
+CSI driver
+   ↓
+Google Cloud Persistent Disk
+1️⃣2️⃣ What Happens If Pod Moves
+
+If pod moves to another node:
+
+1️⃣ disk detaches from old node
+
+detach disk
+
+2️⃣ attaches to new node
+
+attach disk
+
+3️⃣ kubelet mounts it again
+
+Data remains intact.
+
+1️⃣3️⃣ Important Limitation
+
+Most cloud disks support:
+
+ReadWriteOnce
+
+Meaning:
+
+Only one node can mount the disk at a time
+
+That’s why databases often use PVC.
+
+1️⃣4️⃣ Verify This in Your Cluster
+
+You can check:
+
+kubectl get pvc
+
+Then:
+
+kubectl get pv
+
+You’ll see something like:
+
+pvc-1a2b3c4d
+
+Now go to Google Cloud Console → Compute Engine → Disks
+
+You will see the disk created automatically.
+
+1️⃣5️⃣ What Happens When PVC Is Deleted
+
+Depends on reclaim policy.
+
+Most GKE disks use:
+
+Delete
+
+So:
+
+PVC deleted
+↓
+PV deleted
+↓
+Cloud disk deleted
+
+No leftover resources.
+
+1️⃣6️⃣ Why This Design Is Powerful
+
+It decouples:
+
+Application
+Storage infrastructure
+
+Your pod only says:
+
+I need 5GB storage
+
+Kubernetes handles everything else.
+
+1️⃣7️⃣ Real Example for Your Login App
+
+Your login app might store:
+
+profile pictures
+user uploads
+documents
+
+Mount:
+
+/usr/share/nginx/html/uploads
+
+Using PVC.
+
+Even if pod restarts:
+
+uploads remain
+🧠 Final Mental Model
+PVC = request for storage
+PV  = actual storage resource
+CSI = plugin that talks to cloud provider
