@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-app-emptydir-volume
+  labels:
+    app: login-app
+spec:
+  securityContext:
+    runAsUser: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+  volumes:
+    - name: login-shared-storage
+      emptyDir: {}
+  containers:
+  - name: myapp
+    image: prchekuri/login-2514:poornima
+    resources:
+      requests:
+        cpu:  "100m"
+        memory: "128Mi"
+      limits:
+        memory: "256Mi"
+        cpu: "300m"
+    volumeMounts:
+      - name: login-shared-storage
+        mountPath: /tmp/conta
+    ports:
+      - containerPort: 80
+
+

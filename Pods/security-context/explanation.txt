@@ -1,0 +1,263 @@
+1️⃣ What is securityContext?
+
+securityContext defines security settings for a container or pod.
+
+It controls things like:
+
+Linux user IDs
+
+privileges
+
+filesystem permissions
+
+capabilities
+
+SELinux / seccomp profiles
+
+You can define it at two levels:
+
+Level	Scope
+Pod securityContext	applies to all containers
+Container securityContext	overrides per container
+
+Example structure:
+
+spec:
+  securityContext:      # pod level
+  containers:
+  - name: app
+    securityContext:    # container level
+2️⃣ runAsUser
+runAsUser: 1000
+
+This means:
+
+The container process runs as Linux user ID 1000
+
+instead of the default.
+
+Normally many containers run as:
+
+root (UID 0)
+
+Running as root is dangerous.
+
+Example
+
+Without runAsUser:
+
+container process
+UID = 0
+
+With:
+
+runAsUser: 1000
+container process
+UID = 1000
+
+You can verify inside the container:
+
+id
+
+Example output:
+
+uid=1000 gid=0 groups=0
+Why this is important
+
+If the application is compromised:
+
+root inside container
+
+could attempt to access the host system.
+
+Running as non-root greatly reduces risk.
+
+3️⃣ allowPrivilegeEscalation
+allowPrivilegeEscalation: false
+
+This prevents the container from gaining higher privileges during runtime.
+
+Specifically it blocks:
+
+setuid
+setgid
+sudo-like escalation
+Example attack
+
+If a container had:
+
+sudo binary
+
+or a setuid program like:
+
+/usr/bin/passwd
+
+an attacker could escalate to root.
+
+With:
+
+allowPrivilegeEscalation: false
+
+Linux disables privilege escalation for the process.
+
+Internally Kubernetes sets the kernel flag:
+
+no_new_privs
+Kernel behavior
+
+When enabled:
+
+PR_SET_NO_NEW_PRIVS
+
+This ensures:
+
+process cannot gain additional privileges
+
+even if it executes privileged binaries.
+
+4️⃣ readOnlyRootFilesystem
+readOnlyRootFilesystem: true
+
+This makes the container root filesystem read-only.
+
+Normally container root FS is writable.
+
+Example writable paths:
+
+/etc
+/usr
+/var
+/tmp
+
+When this option is enabled:
+
+container root filesystem = read-only
+
+The application cannot modify system files.
+
+Example
+
+Without this setting:
+
+echo "malware" > /usr/bin/evil
+
+could modify container files.
+
+With:
+
+readOnlyRootFilesystem: true
+
+you get error:
+
+Read-only file system
+5️⃣ How Apps Still Write Files
+
+If root filesystem is read-only, apps cannot write here:
+
+/tmp
+/var/log
+/app/data
+
+So you must mount writable volumes:
+
+Example:
+
+volumeMounts:
+- name: tmp
+  mountPath: /tmp
+
+with:
+
+volumes:
+- name: tmp
+  emptyDir: {}
+
+This gives the container writable space.
+
+6️⃣ What Happens Internally
+
+When the container starts:
+
+1️⃣ kubelet prepares container config
+2️⃣ container runtime (containerd) applies security settings
+3️⃣ Linux kernel enforces them
+
+Example configuration passed to container runtime:
+
+UID = 1000
+no_new_privs = true
+root filesystem = read-only
+
+Then the container process launches.
+
+7️⃣ Example with Your Login App
+
+If you applied:
+
+containers:
+- name: login-app
+  image: prchekuri/login-2514:poornima
+
+  securityContext:
+    runAsUser: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+
+Your nginx container would:
+
+run as user 1000
+cannot escalate privileges
+cannot modify root filesystem
+8️⃣ Real Production Security Practice
+
+Most production clusters enforce something like:
+
+runAsNonRoot: true
+readOnlyRootFilesystem: true
+allowPrivilegeEscalation: false
+
+These are part of Kubernetes Pod Security Standards.
+
+9️⃣ Common Issue
+
+If an application tries to write somewhere like:
+
+/var/cache
+/tmp
+/logs
+
+you will see errors:
+
+Read-only file system
+
+Solution:
+
+Mount writable volume:
+
+emptyDir
+PVC
+🔟 Example Secure Container Pattern
+securityContext:
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+
+volumeMounts:
+- name: tmp
+  mountPath: /tmp
+
+volumes:
+- name: tmp
+  emptyDir: {}
+1️⃣1️⃣ Why Kubernetes SecurityContext Exists
+
+Containers share the host kernel, so security must be strict.
+
+SecurityContext ensures:
+
+least privilege execution
+✔️ Summary
+Field	Purpose
+runAsUser	run container process as specific Linux UID
+allowPrivilegeEscalation	prevent gaining root privileges
+readOnlyRootFilesystem	prevent modification of container filesystem
