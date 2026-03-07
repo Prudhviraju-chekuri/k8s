@@ -8,24 +8,31 @@ spec:
   volumes:
     - name: login-shared-storage
       emptyDir: {}
+
+    - name: nginx-cache
+      emptyDir: {}
+
+    - name: nginx-run
+      emptyDir: {}
+
   containers:
   - name: myapp
     image: prchekuri/login-2514:poornima
-    resources:
-      requests:
-        cpu:  "100m"
-        memory: "128Mi"
-      limits:
-        memory: "256Mi"
-        cpu: "300m"
-    volumeMounts:
-      - name: login-shared-storage
-        mountPath: /tmp/conta
+
     securityContext:
       runAsUser: 1000
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
+
+    volumeMounts:
+      - name: login-shared-storage
+        mountPath: /tmp/conta
+
+      - name: nginx-cache
+        mountPath: /var/cache/nginx
+
+      - name: nginx-run
+        mountPath: /var/run
+
     ports:
       - containerPort: 80
-
-
