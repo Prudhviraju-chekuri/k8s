@@ -1,0 +1,287 @@
+Container Lifecycle Hooks in Kubernetes allow you to run commands at specific moments in a container’s life. They help coordinate startup, graceful shutdown, and cleanup tasks.
+
+The lifecycle section in the container spec looks like:
+
+lifecycle:
+  postStart:
+  preStop:
+
+There are only two lifecycle hooks for containers in Kubernetes.
+
+1️⃣ postStart
+2️⃣ preStop
+
+There are no other lifecycle hooks beyond these two.
+
+Let’s go through them carefully.
+
+1️⃣ Where Lifecycle Hooks Fit in Container Startup
+
+When Kubernetes starts a container, the sequence roughly is:
+
+Pod scheduled
+↓
+Container created
+↓
+Container process starts
+↓
+postStart hook executes
+↓
+Container runs normally
+
+When a container stops:
+
+Pod deletion initiated
+↓
+preStop hook executes
+↓
+SIGTERM sent to container
+↓
+grace period
+↓
+container exits
+
+These hooks let you run custom logic during these transitions.
+
+2️⃣ postStart Hook
+
+postStart runs immediately after the container starts.
+
+Example:
+
+lifecycle:
+  postStart:
+    exec:
+      command: ["sh", "-c", "echo container started > /tmp/start.txt"]
+
+This executes inside the container.
+
+What Happens Internally
+
+Sequence:
+
+Container process starts
+↓
+kubelet triggers postStart
+↓
+command executed inside container namespace
+
+Important detail:
+
+postStart runs asynchronously
+
+This means:
+
+the container process may already be running
+
+So it is not guaranteed to run before the main application starts.
+
+Example Use Cases
+
+Common uses:
+
+Initialize runtime data
+
+create directories
+download configuration
+warm cache
+
+Example:
+
+postStart:
+  exec:
+    command: ["sh", "-c", "mkdir -p /tmp/cache"]
+3️⃣ preStop Hook
+
+preStop runs just before the container is terminated.
+
+Example:
+
+lifecycle:
+  preStop:
+    exec:
+      command: ["sh", "-c", "sleep 10"]
+
+This runs before Kubernetes sends SIGTERM.
+
+What Happens Internally
+
+When pod deletion begins:
+
+kubectl delete pod
+↓
+kubelet triggers preStop
+↓
+command executes
+↓
+SIGTERM sent to container
+↓
+grace period countdown
+↓
+container stops
+Graceful Shutdown Example
+
+Suppose your app is behind a service.
+
+When pod is deleted:
+
+traffic may still be coming
+
+preStop can allow time to drain connections.
+
+Example:
+
+preStop:
+  exec:
+    command: ["sh", "-c", "sleep 15"]
+
+This gives load balancers time to stop sending traffic.
+
+4️⃣ Types of Lifecycle Actions
+
+Hooks support three types of actions.
+
+exec
+
+Run a command inside the container.
+
+exec:
+  command: ["sh", "-c", "echo hello"]
+
+Most common.
+
+httpGet
+
+Send HTTP request to the container.
+
+httpGet:
+  path: /shutdown
+  port: 80
+
+Used when apps expose shutdown endpoints.
+
+tcpSocket
+
+Open TCP connection.
+
+Rarely used.
+
+tcpSocket:
+  port: 8080
+5️⃣ Example With Your Login App
+
+Example lifecycle configuration:
+
+containers:
+- name: login-app
+  image: prchekuri/login-2514:poornima
+
+  lifecycle:
+    postStart:
+      exec:
+        command: ["sh", "-c", "echo container started >> /tmp/conta/start.log"]
+
+    preStop:
+      exec:
+        command: ["sh", "-c", "echo container stopping >> /tmp/conta/stop.log"]
+
+If your emptyDir volume is mounted at:
+
+/tmp/conta
+
+You will see files:
+
+start.log
+stop.log
+6️⃣ Lifecycle Hooks vs Probes
+
+These are different concepts.
+
+Feature	Purpose
+Lifecycle hooks	run actions at start/stop
+Liveness probe	detect dead container
+Readiness probe	detect if ready for traffic
+Startup probe	detect slow startup
+
+Hooks do not monitor health.
+
+7️⃣ Common Real-World Uses
+
+Lifecycle hooks are commonly used for:
+
+Graceful shutdown
+
+close connections
+flush logs
+notify service registry
+
+Service deregistration
+
+remove instance from load balancer
+
+Cleanup tasks
+
+delete temporary files
+upload metrics
+
+Startup initialization
+
+populate cache
+load configuration
+create directories
+8️⃣ Important Limitation
+
+If postStart fails:
+
+container is killed
+
+If preStop hangs:
+
+terminationGracePeriodSeconds
+
+controls how long Kubernetes waits.
+
+Default:
+
+30 seconds
+9️⃣ Timeline Diagram
+
+Startup:
+
+Container start
+↓
+postStart hook
+↓
+Application running
+
+Shutdown:
+
+Pod deletion
+↓
+preStop hook
+↓
+SIGTERM
+↓
+Grace period
+↓
+Container exit
+10️⃣ Example Pod With Lifecycle Hooks
+
+Example for your login app:
+
+lifecycle:
+  postStart:
+    exec:
+      command: ["sh", "-c", "echo started >> /tmp/conta/lifecycle.log"]
+
+  preStop:
+    exec:
+      command: ["sh", "-c", "echo stopping >> /tmp/conta/lifecycle.log"]
+11️⃣ Key Takeaways
+
+Container lifecycle hooks:
+
+postStart → runs after container starts
+preStop → runs before container stops
+
+They allow custom startup and shutdown logic.
