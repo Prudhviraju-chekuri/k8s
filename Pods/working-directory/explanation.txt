@@ -1,0 +1,138 @@
+🔹 workingDir in Container Spec
+
+workingDir sets the default working directory inside the container where commands and processes start executing.
+
+Example:
+
+workingDir: /app
+
+This means:
+
+When the container starts,
+its current directory = /app
+
+It is similar to the Linux command:
+
+cd /app
+
+before running the main process.
+
+1️⃣ Why workingDir Is Needed
+
+Many applications expect to run from a specific directory because:
+
+configuration files are relative
+
+scripts assume a current path
+
+logs or outputs are written relative to the working directory
+
+Example application structure:
+
+/app
+ ├── server.js
+ ├── config.json
+ └── logs/
+
+If the working directory is /app, the application can run:
+
+node server.js
+
+Instead of:
+
+node /app/server.js
+2️⃣ Default Behavior (Without workingDir)
+
+If workingDir is not specified, the container starts in the directory defined in the Docker image.
+
+Docker images can define it using:
+
+WORKDIR
+
+Example Dockerfile:
+
+WORKDIR /usr/src/app
+
+If Kubernetes doesn't override it, the container will start there.
+
+3️⃣ Example Pod Using workingDir
+containers:
+- name: app
+  image: node:18
+
+  workingDir: /app
+
+  command: ["node"]
+  args: ["server.js"]
+
+Container internally runs:
+
+cd /app
+node server.js
+4️⃣ Interaction With command and args
+
+workingDir affects where commands execute.
+
+Example:
+
+workingDir: /app
+
+command: ["ls"]
+args: ["-l"]
+
+The container executes:
+
+cd /app
+ls -l
+5️⃣ Example With Your Login App
+
+If you use:
+
+workingDir: /usr/share/nginx/html
+
+Then commands executed inside container run from:
+
+/usr/share/nginx/html
+
+Example:
+
+ls
+
+will list:
+
+index.html
+css/
+js/
+
+instead of the root filesystem.
+
+6️⃣ Verifying Working Directory
+
+Inside the running container:
+
+kubectl exec -it login-pod -- pwd
+
+Output:
+
+/app
+
+(or whatever directory you configured)
+
+7️⃣ Important Notes
+
+The directory must exist in the container filesystem.
+
+If it doesn't exist, the container will fail to start.
+
+Example error:
+
+chdir to /app failed
+✔️ Summary
+
+workingDir simply defines:
+
+The directory where the container process starts execution
+
+Equivalent to:
+
+cd <directory> before running the command
