@@ -1,0 +1,156 @@
+stdin and tty in a container spec control interactive terminal behavior for the container. They determine whether the container can accept input and whether it gets a terminal interface.
+
+Example:
+
+stdin: true
+tty: true
+
+These are mainly used when you want the container to behave like an interactive shell session (similar to running docker run -it).
+
+1️⃣ stdin: true
+stdin: true
+
+This keeps the container’s standard input (STDIN) open.
+
+Normally:
+
+STDIN → closed
+
+When enabled:
+
+STDIN → open
+
+Meaning the container can receive input from the terminal.
+
+Example use case:
+
+kubectl attach -it pod-name
+
+Then you can type commands directly into the container process.
+
+2️⃣ tty: true
+tty: true
+
+Allocates a pseudo-terminal (TTY) for the container.
+
+TTY provides terminal features like:
+
+interactive shell
+
+proper line editing
+
+colored output
+
+signal handling (Ctrl+C)
+
+Without TTY:
+
+commands run non-interactively
+
+With TTY:
+
+container behaves like a terminal session
+3️⃣ How They Work Together
+
+Usually both are used together.
+
+Example:
+
+stdin: true
+tty: true
+
+Equivalent to Docker:
+
+docker run -it
+
+This allows:
+
+interactive terminal session
+4️⃣ Example Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug-pod
+spec:
+  containers:
+  - name: debug
+    image: busybox
+    command: ["sh"]
+
+    stdin: true
+    tty: true
+
+Now you can run:
+
+kubectl attach -it debug-pod
+
+And get an interactive shell.
+
+5️⃣ Difference Between kubectl exec and stdin/tty
+
+Even if stdin and tty are not set, you can still run:
+
+kubectl exec -it pod -- sh
+
+because exec starts a new process.
+
+But stdin and tty control the main container process.
+
+6️⃣ When These Are Useful
+
+Common use cases:
+
+Debug containers
+image: busybox
+command: ["sh"]
+stdin: true
+tty: true
+Development environments
+
+Interactive tools like:
+
+python
+node
+bash
+Interactive apps
+
+Some applications expect terminal input.
+
+7️⃣ Behavior Without These Settings
+
+If both are false (default):
+
+container runs normally
+no interactive terminal
+stdin closed
+
+This is fine for most production applications like:
+
+nginx
+web servers
+APIs
+8️⃣ Verifying Behavior
+
+Check container settings:
+
+kubectl get pod <pod-name> -o yaml
+
+Inside container you can test:
+
+tty
+
+If TTY exists:
+
+/dev/pts/0
+
+Otherwise:
+
+not a tty
+✔️ Summary
+Setting	Purpose
+stdin: true	keep STDIN open
+tty: true	allocate terminal interface
+
+Together they allow:
+
+interactive container sessions
