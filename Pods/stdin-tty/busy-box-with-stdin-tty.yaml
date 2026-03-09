@@ -8,7 +8,7 @@ spec:
   containers:
   - name: busybox-cont
     image: busybox
-    cmd: ["sh"]
+    command: ["sh"]
     workingDir: /busybox-app
     stdin: true
     tty: true
