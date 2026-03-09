@@ -12,6 +12,7 @@ spec:
     workingDir: /busybox-app
     stdin: true
     tty: true
+    restartPolicy: Never
     resources:
       requests:
         cpu: "100m"
