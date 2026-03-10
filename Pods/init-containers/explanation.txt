@@ -1,0 +1,270 @@
+initContainers are special containers that run before the main application containers start. They are used to prepare the environment required for the main containers.
+
+Think of them as setup steps for a Pod.
+
+1️⃣ What Are Init Containers
+
+In a Pod you normally define:
+
+containers:
+
+These are the main application containers.
+
+But you can also define:
+
+initContainers:
+
+These containers:
+
+run before the main containers
+
+run sequentially
+
+must finish successfully
+
+then Kubernetes starts the main containers
+
+If any init container fails → the Pod keeps retrying until it succeeds.
+
+2️⃣ Basic Example
+apiVersion: v1
+kind: Pod
+metadata:
+  name: example-pod
+spec:
+  initContainers:
+  - name: init-db
+    image: busybox
+    command: ["sh", "-c", "echo initializing"]
+
+  containers:
+  - name: app
+    image: nginx
+
+Execution order:
+
+init-db container runs
+        ↓
+completes successfully
+        ↓
+main container (nginx) starts
+3️⃣ Execution Flow Inside Kubernetes
+
+When you run:
+
+kubectl apply -f pod.yaml
+
+Kubernetes performs this sequence:
+
+Pod created
+      ↓
+Scheduler assigns node
+      ↓
+Kubelet starts initContainers
+      ↓
+initContainer 1 runs
+      ↓
+initContainer exits successfully
+      ↓
+next initContainer runs (if present)
+      ↓
+all initContainers finished
+      ↓
+main containers start
+
+Main containers cannot start until init containers finish.
+
+4️⃣ Sequential Execution
+
+If you define multiple init containers:
+
+initContainers:
+- name: init1
+- name: init2
+- name: init3
+
+They run one by one:
+
+init1
+ ↓
+init2
+ ↓
+init3
+ ↓
+main containers
+
+They never run in parallel.
+
+5️⃣ Why Init Containers Are Useful
+
+They solve problems like:
+
+1️⃣ Waiting for a dependency
+
+Example: wait until database is ready.
+
+initContainer
+     ↓
+check DB connection
+     ↓
+when DB ready → exit
+     ↓
+start application
+
+Example command:
+
+command: ["sh", "-c", "until nc -z db 5432; do sleep 2; done"]
+2️⃣ Download configuration or data
+
+Example:
+
+initContainer downloads files
+↓
+stores in shared volume
+↓
+app container uses them
+
+Example:
+
+command: ["sh","-c","wget http://config-server/config.json -O /data/config.json"]
+3️⃣ Database migrations
+
+Before application starts:
+
+initContainer runs migration script
+↓
+updates database schema
+↓
+main app starts
+4️⃣ Preparing shared volumes
+
+Init container writes data into volume:
+
+init container writes file
+↓
+main container reads it
+6️⃣ Shared Volumes with Init Containers
+
+This is the most common pattern.
+
+Example:
+
+spec:
+  volumes:
+  - name: shared-data
+    emptyDir: {}
+
+  initContainers:
+  - name: init-data
+    image: busybox
+    command: ["sh","-c","echo hello > /data/file.txt"]
+    volumeMounts:
+    - name: shared-data
+      mountPath: /data
+
+  containers:
+  - name: app
+    image: nginx
+    volumeMounts:
+    - name: shared-data
+      mountPath: /usr/share/nginx/html
+
+Flow:
+
+init container writes file
+↓
+file stored in emptyDir volume
+↓
+main container reads same file
+7️⃣ Key Properties of Init Containers
+Feature	Behavior
+Run order	sequential
+Restart behavior	restart until success
+Parallel execution	not allowed
+Access volumes	yes
+Access secrets/configMaps	yes
+8️⃣ How Kubernetes Tracks Init Containers
+
+You can see init container status:
+
+kubectl describe pod <pod>
+
+Example output:
+
+Init Containers:
+  init-db:
+    State: Terminated
+    Reason: Completed
+
+Then:
+
+Containers:
+  app:
+    State: Running
+9️⃣ Difference Between Init Containers and Normal Containers
+Feature	Init Containers	Normal Containers
+Execution	before main containers	after init containers
+Parallel	no	yes
+Restart until success	yes	restart based on policy
+Purpose	setup tasks	run application
+🔟 Example Using Your Login App
+
+Example Pod with init container:
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-pod
+spec:
+
+  volumes:
+  - name: shared
+    emptyDir: {}
+
+  initContainers:
+  - name: init-page
+    image: busybox
+    command:
+      - sh
+      - -c
+      - echo "Login App Initialized" > /data/index.html
+    volumeMounts:
+    - name: shared
+      mountPath: /data
+
+  containers:
+  - name: login-app
+    image: nginx
+    volumeMounts:
+    - name: shared
+      mountPath: /usr/share/nginx/html
+
+Result:
+
+init container creates index.html
+↓
+file stored in emptyDir
+↓
+nginx serves the page
+
+If you open the app:
+
+Login App Initialized
+1️⃣1️⃣ Important Production Use Cases
+
+Real systems use init containers for:
+
+database schema migration
+
+config download
+
+certificate generation
+
+dependency checks
+
+filesystem preparation
+
+✅ Key idea
+
+Init containers = setup phase for a pod
+Main containers = application phase
