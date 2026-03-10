@@ -18,7 +18,7 @@ spec:
       - -c
       - echo "<p>login-app is initialized</p>" > /app-data/index.html
     volumeMounts:
-      - name: login-shared-volume
+      - name: login-shared-html
         mountPath: /app-data
   containers:
   - name: login-app-cont
@@ -31,7 +31,7 @@ spec:
         memory: "256Mi"
         cpu: "300m"
     volumeMounts:
-      - name: login-shared-volume
+      - name: login-shared-html
         mountPath: usr/share/nginx/html
       - name: login-shared-log
         mountPath: /var/log/app
