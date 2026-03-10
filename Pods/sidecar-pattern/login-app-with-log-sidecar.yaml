@@ -33,20 +33,10 @@ spec:
     volumeMounts:
       - name: login-shared-html
         mountPath: usr/share/nginx/html
-      - name: login-shared-log
-        mountPath: /var/log/app
-    command: ["bin/sh"]
-    args: 
-      - -c
-      - |
-        while true; do
-          echo "$(date) login-app running" >> /var/log/app/app.log
-          sleep 10
-        done
     ports:
       - containerPort: 80
   
-  - name: log-sidecar-cont
+  - name: log-stream-sidecar-cont
     image:  busybox
     volumeMounts:
       - name:  login-shared-log
@@ -56,3 +46,17 @@ spec:
       - -c
       - |
         tail -n+1 -f /var/log/app/app.log
+
+  - name: log-writer-sidecar-cont
+    image:  busybox
+    volumeMounts:
+      - name:  login-shared-log
+        mountPath: /var/log/app
+    command: ["bin/sh"]
+    args: 
+      - -c
+      - |
+        while true; do
+          echo "$(date) login-app running" >> /var/log/app/app.log
+          sleep 10
+        done
