@@ -30,4 +30,4 @@ spec:
 
       - name: config
         configMap:
-          name: fluentbit-config
+          name: fluent-bit-config
