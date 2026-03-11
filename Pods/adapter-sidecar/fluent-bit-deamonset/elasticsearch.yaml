@@ -25,8 +25,6 @@ spec:
         ports:
         - containerPort: 9200
 ---
-- name: xpack.security.enabled
-  value: "false"
 
 # ElasticSearch Service
 
