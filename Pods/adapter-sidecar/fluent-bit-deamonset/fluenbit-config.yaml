@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentbit-config
+data:
+
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush        1
+        Log_Level    info
+
+    [INPUT]
+        Name tail
+        Path /var/log/containers/*.log
+        Parser docker
+        Tag kube.*
+
+    [OUTPUT]
+        Name es
+        Match *
+        Host elasticsearch.default.svc.cluster.local
+        Port 9200
+        Index kube-logs
