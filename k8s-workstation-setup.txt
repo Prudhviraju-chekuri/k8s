@@ -23,8 +23,8 @@ export USE_GKE_GCLOUD_AUTH_PLUGIN=True
 
 5. Get Cluster Credentials
 
-gcloud container clusters get-credentials prudhvi-k8s-cluster \
-  --zone us-central1-a
+gcloud container clusters get-credentials prudhvi-cluster-k8s \
+  --zone us-central1-b
 
 This command:
 

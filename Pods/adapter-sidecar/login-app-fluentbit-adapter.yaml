@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-app-fluentbit
+  labels:
+    app: login-app
+spec:
+
+  volumes:
+    - name: log-volume
+      emptyDir: {}
+
+    - name: fluentbit-config-volume
+      configMap:
+        name: fluentbit-config
+
+  containers:
+
+  # Main application container
+  - name: login-app
+    image: prchekuri/login-2514:poornima
+    volumeMounts:
+      - name: log-volume
+        mountPath: /var/log/app
+    command: ["sh","-c"]
+    args:
+      - |
+        while true; do
+          echo "$(date) user login success" >> /var/log/app/app.log
+          sleep 5
+        done
+
+  # FluentBit adapter container
+  - name: fluentbit-adapter
+    image: fluent/fluent-bit:2.2
+    volumeMounts:
+      - name: log-volume
+        mountPath: /var/log/app
+
+      - name: fluentbit-config-volume
+        mountPath: /fluent-bit/etc/
+
+    command:
+      - /fluent-bit/bin/fluent-bit
+      - -c
+      - /fluent-bit/etc/fluent-bit.conf

@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentbit-config
+data:
+
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush        1
+        Log_Level    info
+
+    [INPUT]
+        Name              tail
+        Path              /var/log/app/app.log
+        Tag               login.app
+        Refresh_Interval  5
+
+    [FILTER]
+        Name    modify
+        Match   login.app
+        Add     app login-app
+
+    [OUTPUT]
+        Name   stdout
+        Match  *

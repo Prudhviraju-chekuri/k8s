@@ -1,0 +1,267 @@
+Fluent Bit is commonly used as a sidecar adapter that reads logs from an application and converts/forwards them to another system (Elasticsearch, Loki, Cloud Logging, etc.).
+
+We’ll build a real adapter pattern using Fluent Bit with your login app.
+
+Architecture we’ll create:
+
+login-app container
+        │
+writes logs → /var/log/app/app.log
+        │
+        ▼
+Shared Volume (emptyDir)
+        │
+        ▼
+Fluent Bit sidecar (Adapter)
+        │
+parses / transforms logs
+        ▼
+stdout (kubectl logs) or external system
+
+This demonstrates the Adapter Pattern:
+
+App log format → FluentBit → structured/processed logs
+Step 1 — Create Fluent Bit ConfigMap
+
+Fluent Bit needs configuration files.
+
+Create a file:
+
+fluentbit-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentbit-config
+data:
+
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush        1
+        Log_Level    info
+
+    [INPUT]
+        Name              tail
+        Path              /var/log/app/app.log
+        Tag               login.app
+        Refresh_Interval  5
+
+    [FILTER]
+        Name    modify
+        Match   login.app
+        Add     app login-app
+
+    [OUTPUT]
+        Name   stdout
+        Match  *
+What this does
+
+Fluent Bit pipeline:
+
+INPUT → FILTER → OUTPUT
+
+INPUT
+
+tail /var/log/app/app.log
+
+FILTER
+
+add field "app=login-app"
+
+OUTPUT
+
+print to stdout
+Step 2 — Create Pod with Adapter Pattern
+
+Create:
+
+login-app-fluentbit-adapter.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: login-app-fluentbit
+  labels:
+    app: login-app
+spec:
+
+  volumes:
+    - name: log-volume
+      emptyDir: {}
+
+    - name: fluentbit-config-volume
+      configMap:
+        name: fluentbit-config
+
+  containers:
+
+  # Main application container
+  - name: login-app
+    image: prchekuri/login-2514:poornima
+    volumeMounts:
+      - name: log-volume
+        mountPath: /var/log/app
+    command: ["sh","-c"]
+    args:
+      - |
+        while true; do
+          echo "$(date) user login success" >> /var/log/app/app.log
+          sleep 5
+        done
+
+  # FluentBit adapter container
+  - name: fluentbit-adapter
+    image: fluent/fluent-bit:2.2
+    volumeMounts:
+      - name: log-volume
+        mountPath: /var/log/app
+
+      - name: fluentbit-config-volume
+        mountPath: /fluent-bit/etc/
+
+    command:
+      - /fluent-bit/bin/fluent-bit
+      - -c
+      - /fluent-bit/etc/fluent-bit.conf
+Step 3 — Apply Everything
+
+First create ConfigMap:
+
+kubectl apply -f fluentbit-config.yaml
+
+Then create Pod:
+
+kubectl apply -f login-app-fluentbit-adapter.yaml
+
+Check pod:
+
+kubectl get pods
+
+Expected:
+
+login-app-fluentbit   2/2 Running
+Step 4 — Verify Adapter is Working
+
+Check logs of Fluent Bit container:
+
+kubectl logs login-app-fluentbit -c fluentbit-adapter
+
+Example output:
+
+[0] login.app: [1710020000.123] user login success
+[0] login.app: [1710020005.456] user login success
+
+Fluent Bit is:
+
+reading logs
+processing them
+printing output
+Step 5 — Verify Shared Volume
+
+Enter the application container:
+
+kubectl exec -it login-app-fluentbit -c login-app -- sh
+
+Check logs:
+
+cat /var/log/app/app.log
+
+Example:
+
+Tue Mar 11 10:10:10 UTC 2026 user login success
+Tue Mar 11 10:10:15 UTC 2026 user login success
+
+Fluent Bit sidecar reads the same file.
+
+Step 6 — Real Production Architecture
+
+Real clusters do this:
+
+App container
+     │
+writes logs
+     ▼
+Shared Volume or stdout
+     ▼
+FluentBit / Fluentd
+     ▼
+Log Storage
+
+Example destinations:
+
+FluentBit → Elasticsearch
+FluentBit → Loki
+FluentBit → Cloud Logging
+FluentBit → Kafka
+Step 7 — Why This Is Called Adapter Pattern
+
+Your application logs:
+
+Tue Mar 11 user login success
+
+Fluent Bit can convert it into structured logs:
+
+{
+  "time":"2026-03-11",
+  "event":"login_success",
+  "app":"login-app"
+}
+
+So Fluent Bit adapts the format.
+
+App log format
+      │
+      ▼
+FluentBit Adapter
+      │
+      ▼
+Standardized log format
+Step 8 — What Real Clusters Do Differently
+
+In production we usually don't run Fluent Bit as sidecar.
+
+Instead we run DaemonSet:
+
+Node
+ ├─ Pod A
+ ├─ Pod B
+ ├─ Pod C
+ └─ FluentBit (DaemonSet)
+
+FluentBit reads logs from:
+
+/var/log/containers
+
+But sidecar is still used when:
+
+app-specific parsing required
+Step 9 — Commands to Observe Everything
+
+Check containers:
+
+kubectl get pods -o wide
+
+Check adapter logs:
+
+kubectl logs login-app-fluentbit -c fluentbit-adapter
+
+Check app logs:
+
+kubectl exec -it login-app-fluentbit -c login-app -- cat /var/log/app/app.log
+
+Describe pod:
+
+kubectl describe pod login-app-fluentbit
+Step 10 — What You Just Built
+
+You implemented a real Kubernetes adapter pattern:
+
+login-app container
+        │
+writes logs
+        ▼
+shared volume
+        ▼
+FluentBit adapter
+        ▼
+structured logging output
+
+This is production-level architecture used in companies.
