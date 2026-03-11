@@ -20,9 +20,13 @@ spec:
           value: single-node
         - name: ES_JAVA_OPTS
           value: "-Xms512m -Xmx512m"
+        - name: xpack.security.enabled
+          value: "false"
         ports:
         - containerPort: 9200
 ---
+- name: xpack.security.enabled
+  value: "false"
 
 # ElasticSearch Service
 
