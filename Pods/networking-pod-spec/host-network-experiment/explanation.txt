@@ -1,0 +1,230 @@
+Great 👍 Let’s do a small Kubernetes networking experiment.
+This experiment will visually prove the difference between hostNetwork: false and hostNetwork: true.
+
+You will clearly see:
+
+Pod network namespace
+
+Node network namespace
+
+IP differences
+
+Interface differences
+
+This experiment is very useful for Kubernetes interviews and deep understanding.
+
+🧪 Step 1 — Create a Normal Pod (hostNetwork: false)
+
+Create this Pod.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: normal-net-pod
+spec:
+  containers:
+  - name: net-test
+    image: busybox
+    command: ["sleep", "3600"]
+
+Apply it:
+
+kubectl apply -f normal-pod.yaml
+
+Check the Pod IP.
+
+kubectl get pod normal-net-pod -o wide
+
+Example output:
+
+NAME             READY   STATUS
+normal-net-pod   1/1     Running
+
+IP: 10.244.0.5
+NODE: gke-node-1
+
+Notice the Pod IP (10.x.x.x).
+
+🧪 Step 2 — Exec Into the Pod
+kubectl exec -it normal-net-pod -- sh
+
+Now run:
+
+ip addr
+
+You will see something like:
+
+1: lo
+2: eth0@if123
+    inet 10.244.0.5/24
+
+This is the Pod network interface.
+
+Check routing table
+ip route
+
+Example:
+
+default via 10.244.0.1 dev eth0
+10.244.0.0/24 dev eth0
+
+The Pod routes traffic through the CNI network.
+
+Check hostname
+hostname
+
+Output:
+
+normal-net-pod
+🧪 Step 3 — Create Host Network Pod
+
+Now create another pod.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-net-pod
+spec:
+  hostNetwork: true
+  containers:
+  - name: net-test
+    image: busybox
+    command: ["sleep", "3600"]
+
+Apply it.
+
+kubectl apply -f host-pod.yaml
+
+Check IP.
+
+kubectl get pod host-net-pod -o wide
+
+Example:
+
+NAME          READY   STATUS
+host-net-pod  1/1     Running
+
+IP: 192.168.1.10
+NODE: gke-node-1
+
+Notice:
+
+Pod IP = Node IP
+
+🧪 Step 4 — Exec Into Host Network Pod
+kubectl exec -it host-net-pod -- sh
+
+Run:
+
+ip addr
+
+Now you will see all node interfaces.
+
+Example:
+
+1: lo
+2: eth0
+    inet 192.168.1.10
+3: docker0
+4: cni0
+5: flannel.1
+
+These are node network interfaces, not pod interfaces.
+
+🧪 Step 5 — Check Routing Table
+
+Run:
+
+ip route
+
+Example:
+
+default via 192.168.1.1 dev eth0
+10.244.0.0/16 via cni0
+
+This is the actual node routing table.
+
+The pod now sees real node networking.
+
+🧪 Step 6 — Check Listening Ports
+
+Run inside both pods:
+
+netstat -tuln
+Normal Pod
+
+You will see very few ports.
+
+Example:
+
+tcp   0   0 0.0.0.0:8080
+Host Network Pod
+
+You will see node services.
+
+Example:
+
+tcp 0 0 0.0.0.0:22
+tcp 0 0 0.0.0.0:10250
+tcp 0 0 0.0.0.0:10255
+
+These are node services like kubelet.
+
+🧠 Visual Difference
+Normal Pod
+Node
+ ├─ eth0 (192.168.1.10)
+
+Pod
+ ├─ eth0 (10.244.0.5)
+ └─ isolated network
+Host Network Pod
+Node
+ ├─ eth0 (192.168.1.10)
+ ├─ cni0
+ ├─ docker0
+ └─ pod shares this network
+🔥 Important Observation
+
+Run this inside both pods:
+
+cat /proc/net/dev
+Normal Pod
+
+Shows only:
+
+eth0
+lo
+Host Network Pod
+
+Shows:
+
+eth0
+cni0
+flannel.1
+docker0
+
+This is exactly why Node Exporter needs hostNetwork.
+
+It must monitor all node interfaces.
+
+🎯 Real Production Example
+
+Node exporter daemonset:
+
+hostNetwork: true
+hostPID: true
+hostPath:
+  - /proc
+  - /sys
+
+So it can read:
+
+Node CPU
+Node Network
+Node Disk
+Node Memory
+🚀 Final Simple Rule
+Type	Network
+Application Pods	Pod Network
+Node Agents	Host Network
