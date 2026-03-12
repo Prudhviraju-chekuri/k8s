@@ -1,0 +1,222 @@
+In a Kubernetes Pod spec, the Networking section controls how the Pod connects to networks and how DNS/hostnames work inside the Pod. Let’s go through each field clearly with why and when it is used.
+
+🌐 Kubernetes Pod Networking Fields
+1️⃣ hostNetwork: true
+🔹 What it does
+
+When hostNetwork: true is set, the Pod shares the node’s network namespace.
+
+That means:
+
+The Pod uses the same IP address as the node
+
+It does not get its own Pod IP
+
+Ports opened inside the container are opened directly on the node
+
+📌 Example
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-network-pod
+spec:
+  hostNetwork: true
+  containers:
+  - name: nginx
+    image: nginx
+    ports:
+    - containerPort: 80
+🔹 What happens here
+
+Normally:
+
+Pod IP → 10.244.0.5
+Node IP → 192.168.1.10
+
+But with hostNetwork: true
+
+Pod IP → 192.168.1.10 (same as node)
+🔹 Why it is used
+
+Used when the container must access the node network directly.
+
+Common cases:
+
+Use Case	Example
+Node monitoring	Prometheus node exporter
+Network tools	CNI plugins
+Log collectors	Fluentd
+System agents	kube-proxy
+
+Example:
+
+DaemonSet → runs on every node
+Pod → uses host network
+Tool → monitors node ports
+⚠️ Important Limitation
+
+Since the Pod uses the node IP, you cannot run multiple Pods on the same node using the same port.
+
+Example:
+
+Pod1 → port 80
+Pod2 → port 80 ❌ conflict
+2️⃣ dnsPolicy
+🔹 What it does
+
+Controls how DNS works inside the Pod.
+
+It tells Kubernetes which DNS server the Pod should use.
+
+Default
+dnsPolicy: ClusterFirst
+📌 ClusterFirst (most common)
+
+Pod first queries Kubernetes DNS.
+
+Example:
+
+Pod tries to resolve:
+
+mysql-service
+
+DNS flow:
+
+Pod
+ ↓
+CoreDNS (cluster DNS)
+ ↓
+Service IP returned
+
+Example service resolution:
+
+mysql.default.svc.cluster.local
+Other DNS policies
+Policy	Meaning
+ClusterFirst	Use cluster DNS first
+Default	Use node's /etc/resolv.conf
+ClusterFirstWithHostNet	Used with hostNetwork
+None	User manually configures DNS
+Special case
+
+If you use:
+
+hostNetwork: true
+
+Then Kubernetes usually recommends:
+
+dnsPolicy: ClusterFirstWithHostNet
+
+because the pod is using the node network.
+
+3️⃣ hostname
+🔹 What it does
+
+Overrides the hostname inside the Pod.
+
+Normally:
+
+hostname = Pod name
+
+Example Pod:
+
+metadata:
+  name: myapp-pod
+
+Inside container:
+
+hostname
+→ myapp-pod
+Custom hostname example
+spec:
+  hostname: my-custom-host
+
+Inside container:
+
+hostname
+→ my-custom-host
+Why used
+
+Rarely used, but helpful when:
+
+Applications depend on specific hostnames
+
+Stateful applications
+
+Legacy software
+
+4️⃣ subdomain
+🔹 What it does
+
+Used with hostname to create stable DNS names for Pods.
+
+It works with Headless Services.
+
+Example
+spec:
+  hostname: db-1
+  subdomain: mysql
+
+Service:
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  clusterIP: None
+Resulting DNS name
+db-1.mysql.default.svc.cluster.local
+
+So the Pod can be reached via:
+
+db-1.mysql
+Why used
+
+Very important for:
+
+Use Case	Example
+Stateful applications	MySQL cluster
+Databases	Cassandra
+Distributed systems	Kafka
+StatefulSet pods	Each pod needs stable DNS
+
+Example:
+
+mysql-0.mysql
+mysql-1.mysql
+mysql-2.mysql
+
+Each Pod gets its own DNS.
+
+🧠 Simple Visualization
+Normal Pod Networking
+Pod
+IP: 10.244.0.5
+Hostname: pod-name
+
+DNS → CoreDNS
+With hostNetwork
+Pod
+IP: Node IP
+Network: Node Network
+
+Port conflicts possible
+With hostname + subdomain
+Pod hostname → db-1
+Subdomain → mysql
+
+DNS → db-1.mysql.default.svc.cluster.local
+🎯 Interview Style Summary
+Field	What it does	Typical Usage
+hostNetwork	Pod uses node network	System agents
+dnsPolicy	Controls DNS resolution	Default: ClusterFirst
+hostname	Custom hostname	Stateful apps
+subdomain	Creates DNS with service	StatefulSets
+
+✅ Simple rule to remember
+
+hostNetwork → network namespace
+dnsPolicy → DNS behavior
+hostname → pod hostname
+subdomain → DNS domain for pod
