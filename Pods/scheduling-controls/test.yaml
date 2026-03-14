@@ -1,9 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: node-anti-affinity-pod
-  labels:
-    pod: node-anti-affinity-pod
+  name: test
 spec:
   affinity:
     podAntiAffinity:
@@ -14,6 +12,10 @@ spec:
                 operator: In
                 values:
                 - login-app
+              - key: pod
+                operator: In
+                values:
+                - node-anti-affinity-pod
           topologyKey: "kubernetes.io/hostname"
   containers:
     - name: nginx
