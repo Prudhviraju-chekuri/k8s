@@ -7,12 +7,12 @@ spec:
     podAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
         - labelSelector:
-          topologyKey: kubernetes.io/hostname
-          matchExpressions:
+           matchExpressions:
               - key: app
                 operator: In
                 values:
                 - login-app
+          topologyKey: "kubernetes.io/hostname"
   containers:
     - name: nginx
       image: nginx
