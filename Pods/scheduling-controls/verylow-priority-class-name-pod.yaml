@@ -5,7 +5,6 @@ metadata:
   labels:
     app: very-low-priority
 spec:
-  nodeName: gke-prudhvi-k8s-cluster-default-pool-5e6e1f73-w7sr
   priorityClassName:  very-low-priority
   containers:
   - name: login-app
