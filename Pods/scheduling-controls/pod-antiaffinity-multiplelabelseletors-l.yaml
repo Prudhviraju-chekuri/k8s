@@ -12,6 +12,9 @@ spec:
                 operator: In
                 values:
                 - login-app
+          topologyKey: "kubernetes.io/hostname"
+        - labelSelector:
+           matchExpressions:
               - key: pod
                 operator: In
                 values:
