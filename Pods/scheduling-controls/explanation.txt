@@ -1,0 +1,381 @@
+🎯 E. Scheduling Controls
+
+These controls influence how the Kubernetes scheduler chooses a node for a Pod.
+
+Flow (simplified):
+
+Pod created
+     ↓
+Scheduler checks rules
+     ↓
+Find nodes matching nodeSelector / affinity
+     ↓
+Remove nodes blocked by taints
+     ↓
+Choose best node
+     ↓
+Pod scheduled
+1️⃣ nodeSelector
+What it is
+
+nodeSelector is the simplest way to schedule a Pod on specific nodes.
+
+It works using node labels.
+
+A node must have matching labels, otherwise the Pod will not be scheduled there.
+
+Example
+Step 1: Add label to node
+kubectl label node worker-node1 disktype=ssd
+
+Now the node has:
+
+disktype=ssd
+Step 2: Pod spec
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ssd-pod
+spec:
+  nodeSelector:
+    disktype: ssd
+  containers:
+  - name: nginx
+    image: nginx
+What scheduler does
+Nodes in cluster
+ ├── node1 (disktype=ssd)   ✅
+ ├── node2 (disktype=hdd)   ❌
+ └── node3 (no label)       ❌
+
+Pod will run only on node1.
+
+When used
+
+Typical use cases:
+
+Scenario	Example
+High speed disk	database pods
+GPU nodes	ML workloads
+Dedicated nodes	security workloads
+Region based	edge workloads
+Limitations
+
+nodeSelector only supports exact match.
+
+You cannot say:
+
+disk = ssd OR nvme
+
+or
+
+disk != hdd
+
+For advanced rules we use Affinity.
+
+2️⃣ nodeName
+What it is
+
+nodeName directly assigns a Pod to a specific node.
+
+The scheduler is bypassed.
+
+Example
+apiVersion: v1
+kind: Pod
+metadata:
+  name: manual-pod
+spec:
+  nodeName: worker-node1
+  containers:
+  - name: nginx
+    image: nginx
+
+This pod will only run on worker-node1.
+
+Scheduler behavior
+
+Normally:
+
+Pod → Scheduler → Node
+
+With nodeName:
+
+Pod → directly assigned to node
+If node doesn't exist
+
+Pod stays in:
+
+Pending
+Real use cases
+
+Very rare. Mostly used by:
+
+System component	Why
+Static Pods	kube-apiserver
+Debugging	run pod on specific node
+Daemon processes	manual control
+
+Usually DaemonSets are preferred.
+
+3️⃣ Affinity
+
+Affinity provides advanced scheduling rules.
+
+It supports:
+
+nodeAffinity
+podAffinity
+podAntiAffinity
+
+Think of affinity as advanced nodeSelector + pod relationships.
+
+3.1 Node Affinity
+
+Controls which nodes a Pod can run on.
+
+Two types:
+
+requiredDuringSchedulingIgnoredDuringExecution
+preferredDuringSchedulingIgnoredDuringExecution
+Example
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: disktype
+          operator: In
+          values:
+          - ssd
+Scheduler logic
+
+Node must satisfy:
+
+disktype IN (ssd)
+
+Nodes:
+
+node1 → disktype=ssd  ✅
+node2 → disktype=hdd  ❌
+node3 → disktype=nvme ❌
+
+Pod scheduled on node1.
+
+Operators supported
+Operator	Meaning
+In	value must match
+NotIn	must not match
+Exists	key must exist
+DoesNotExist	key must not exist
+Gt	greater than
+Lt	less than
+Example with multiple disks
+values:
+- ssd
+- nvme
+
+Meaning:
+
+disktype = ssd OR nvme
+Preferred scheduling
+preferredDuringSchedulingIgnoredDuringExecution:
+- weight: 1
+  preference:
+    matchExpressions:
+    - key: disktype
+      operator: In
+      values:
+      - ssd
+
+Meaning:
+
+Prefer SSD nodes
+But if not available → schedule elsewhere
+3.2 Pod Affinity
+
+Controls which pods should run together.
+
+Used for co-location.
+
+Example
+
+Run web pod near cache pod.
+
+podAffinity:
+  requiredDuringSchedulingIgnoredDuringExecution:
+  - labelSelector:
+      matchExpressions:
+      - key: app
+        operator: In
+        values:
+        - redis
+    topologyKey: kubernetes.io/hostname
+
+Meaning:
+
+Place this pod on a node that already has a Redis pod
+Example scenario
+
+Nodes:
+
+node1 → redis pod
+node2 → no redis
+
+Web pod scheduled on:
+
+node1
+Real use cases
+Scenario	Reason
+App + cache	reduce latency
+App + DB proxy	faster communication
+microservices	performance optimization
+3.3 Pod Anti-Affinity
+
+Opposite of podAffinity.
+
+Used to separate pods.
+
+Example
+podAntiAffinity:
+  requiredDuringSchedulingIgnoredDuringExecution:
+  - labelSelector:
+      matchExpressions:
+      - key: app
+        operator: In
+        values:
+        - web
+    topologyKey: kubernetes.io/hostname
+
+Meaning:
+
+Do NOT place two web pods on same node
+Example cluster
+
+Nodes:
+
+node1 → web pod
+node2 → empty
+node3 → empty
+
+New web pods scheduled:
+
+web-1 → node1
+web-2 → node2
+web-3 → node3
+Real use cases
+Scenario	Why
+High availability	avoid single node failure
+Load distribution	spread traffic
+replicas	distributed deployment
+
+Very common in Deployments and StatefulSets.
+
+4️⃣ Tolerations
+
+To understand tolerations we must understand taints.
+
+Taint = node repels pods
+
+Example:
+
+kubectl taint nodes node1 key1=value1:NoSchedule
+
+Meaning:
+
+Do NOT schedule pods on node1
+Unless pod has a toleration
+Pod Spec
+tolerations:
+- key: "key1"
+  operator: "Equal"
+  value: "value1"
+  effect: "NoSchedule"
+
+Now the pod can run on node1.
+
+Visual explanation
+
+Without toleration:
+
+node1 (tainted) ❌
+node2           ✅
+node3           ✅
+
+With toleration:
+
+node1           ✅
+node2           ✅
+node3           ✅
+Taint Effects
+Effect	Meaning
+NoSchedule	new pods not scheduled
+PreferNoSchedule	avoid scheduling
+NoExecute	evict running pods
+Real use cases
+Node Type	Why taint
+GPU nodes	only ML workloads
+master nodes	system pods only
+monitoring nodes	monitoring agents
+special hardware	dedicated usage
+5️⃣ priorityClassName
+
+Controls pod priority during scheduling and eviction.
+
+High priority pods get preference.
+
+Example
+spec:
+  priorityClassName: high-priority
+
+Priority class defined as:
+
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 100000
+globalDefault: false
+description: "High priority pods"
+Example scenario
+
+Node capacity:
+
+CPU: 4 cores
+
+Pods:
+
+pod-A (priority 100)
+pod-B (priority 100)
+pod-C (priority 100000)
+
+If cluster is full:
+
+Scheduler evicts low priority pods.
+
+pod-A removed
+pod-C scheduled
+Real use cases
+Pod Type	Priority
+kube-dns	high
+monitoring	high
+business apps	medium
+batch jobs	low
+🧠 Summary
+Feature	Purpose
+nodeSelector	simplest node selection
+nodeName	force pod on specific node
+nodeAffinity	advanced node selection
+podAffinity	place pods together
+podAntiAffinity	separate pods
+tolerations	allow pods on tainted nodes
+priorityClassName	control scheduling priority
+
+✅ Simple way to remember
+
+nodeSelector → choose node
+affinity → advanced rules
+tolerations → allow tainted nodes
+priorityClass → scheduling importance
+nodeName → manual node selection
+
