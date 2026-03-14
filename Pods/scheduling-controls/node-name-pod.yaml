@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-name-pod
+spec:
+  nodeName: gke-prudhvi-k8s-cluster-default-pool-5e6e1f73-479l
+  containers:
+    - name: nginx
+      image: nginx
