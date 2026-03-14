@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: very-very-low-priority
+  name: very-very-low-priority2
   labels:
     app: very-low-priority
 spec:
