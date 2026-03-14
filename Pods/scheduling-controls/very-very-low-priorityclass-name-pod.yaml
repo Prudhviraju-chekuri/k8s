@@ -5,13 +5,13 @@ metadata:
   labels:
     app: very-low-priority
 spec:
-  nodeName: gke-prudhvi-k8s-cluster-default-pool-5e6e1f73-w7sr
+  nodeName: gke-prudhvi-k8s-cluster-default-pool-5e6e1f73-wl62
   priorityClassName:  very-very-low-priority
   containers:
   - name: login-app
     image: prchekuri/login-2514:poornima
     resources:
       requests:
-        cpu: "200m"
+        cpu: "400m"
     ports:
       - containerPort: 80
