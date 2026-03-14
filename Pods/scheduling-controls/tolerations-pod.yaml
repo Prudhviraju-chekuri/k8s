@@ -13,6 +13,11 @@ spec:
                values:
                - login-app
           topologyKey: "kubernetes.io/hostname"
+  tolerations:
+  - key: "master"
+    operator: "Equal"
+    value: "true"
+    effect: NoSchedule
   containers:
     - name: nginx
       image: nginx
