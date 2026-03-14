@@ -21,3 +21,19 @@ metadata:
 value: 1000
 globalDefault: false
 description: "low priority pods"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: very-low-priority
+value: 300
+globalDefault: false
+description: "very low priority pods"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: very-very-low-priority
+value: 200
+globalDefault: false
+description: "very very low priority pods"
