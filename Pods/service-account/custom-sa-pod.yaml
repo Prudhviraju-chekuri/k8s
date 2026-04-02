@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: default-sa-pod
+  name: custom-sa-pod
 spec:
   serviceAccountName: my-sa
   containers:
