@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: projected-token-pod
+spec:
+  serviceAccountName: my-sa
+  containers:
+  - name: app
+    image: curlimages/curl
+    command: ["sleep", "3600"]
+    volumeMounts:
+    - name: token-vol
+      mountPath: /custom-token
+  volumes:
+  - name: token-vol
+    projected:
+      sources:
+      - serviceAccountToken:
+          path: token
+          expirationSeconds: 600

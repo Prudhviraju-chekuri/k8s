@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-token-pod
+spec:
+  serviceAccountName: my-sa
+  automountServiceAccountToken: false
+  containers:
+  - name: app
+    image: curlimages/curl
+    command: ["sleep", "3600"]
