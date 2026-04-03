@@ -11,8 +11,8 @@ spec:
       - sh
       - -c
       - |
-        echo "START"
+        echo "START $(date)"
 
-        trap 'echo "SIGTERM RECEIVED"; sleep 20' TERM
+        trap 'echo "SIGTERM RECEIVED $(date)"; sleep 20' TERM
 
         sleep 300
