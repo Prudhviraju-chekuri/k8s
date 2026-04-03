@@ -13,7 +13,7 @@ spec:
       - |
         echo "START $(date)"
 
-        trap 'echo "SIGTERM RECEIVED $(date)"; sleep 3; echo "EXITING CLEANLY"; exit 0' TERM
+        trap 'echo "SIGTERM RECEIVED $(date)"; sleep 3; echo "EXITING CLEANLY $(date)"; exit 0' TERM
 
         while true; do
           echo "RUNNING $(date)"
