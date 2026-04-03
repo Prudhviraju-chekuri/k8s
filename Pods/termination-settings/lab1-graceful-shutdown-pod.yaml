@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab1-graceful
+spec:
+  terminationGracePeriodSeconds: 10
+  containers:
+  - name: app
+    image: busybox
+    command:
+      - sh
+      - -c
+      - |
+        echo "START $(date)"
+
+        trap 'echo "SIGTERM RECEIVED $(date)"; sleep 3; echo "EXITING CLEANLY"; exit 0' TERM
+
+        while true; do
+          echo "RUNNING $(date)"
+          sleep 2
+        done
