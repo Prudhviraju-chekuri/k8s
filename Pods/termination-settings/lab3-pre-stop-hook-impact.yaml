@@ -10,7 +10,13 @@ spec:
     lifecycle: 
       preStop:
         exec:
-          command: ["sh", "-c", "echo PRESTOP START; sleep 6; echo PRESTOP END"]
+          command:
+            - sh
+            - -c
+            - |
+              echo PRESTOP START >> /tmp/prestop.log
+              sleep 6
+              echo PRESTOP END >> /tmp/prestop.log
     command:
       - sh
       - -c
