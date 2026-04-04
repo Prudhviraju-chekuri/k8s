@@ -14,9 +14,9 @@ spec:
             - sh
             - -c
             - |
-              echo PRESTOP START >> /tmp/prestop.log
+              echo PRESTOP START $(date) >> /tmp/prestop.log
               sleep 6
-              echo PRESTOP END >> /tmp/prestop.log
+              echo PRESTOP END $(date) >> /tmp/prestop.log
     command:
       - sh
       - -c
