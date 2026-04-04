@@ -15,4 +15,7 @@ spec:
 
         trap 'echo "SIGTERM RECEIVED $(date)"; sleep 20' TERM
 
-        sleep 300
+        while true; do
+          echo "RUNNING $(date)"
+          sleep 1
+        done
