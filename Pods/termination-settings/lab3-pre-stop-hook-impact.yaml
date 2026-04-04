@@ -4,9 +4,17 @@ metadata:
   name: lab3-prestop-sigterm
 spec:
   terminationGracePeriodSeconds: 10
+  volumes: 
+    - name: host-logs
+      hostPath:
+        path: /var/log/
+        type: DirectoryOrCreate
   containers:
   - name: app
     image: busybox
+    volumeMounts:
+      - name: host-logs
+        mountPath:  /prestoplogs
     lifecycle: 
       preStop:
         exec:
@@ -14,9 +22,9 @@ spec:
             - sh
             - -c
             - |
-              echo PRESTOP START $(date) >> /tmp/prestop.log
+              echo PRESTOP START $(date) >> /prestoplogs/prestop.log
               sleep 6
-              echo PRESTOP END $(date) >> /tmp/prestop.log
+              echo PRESTOP END $(date) >> /prestoplogs/prestop.log
     command:
       - sh
       - -c
